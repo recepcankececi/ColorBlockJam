@@ -93,5 +93,23 @@ namespace CBJ.Tests.EditMode.Gameplay
 
             Assert.That(() => CameraFit.Fit(box, TopDown, 1f, Distance, 0f, 0.5f, 0.5f), Throws.TypeOf<ArgumentException>());
         }
+
+        [Test]
+        public void ReservedBands_FullScreenSafeArea_KeepsTheUiBands()
+        {
+            CameraFit.ReservedBands(new Rect(0f, 0f, 1080f, 1920f), 1920f, 0.16f, 0.12f, out float top, out float bottom);
+
+            Assert.That((top, bottom), Is.EqualTo((0.16f, 0.12f)));
+        }
+
+        [Test]
+        public void ReservedBands_NotchAndGestureBar_AddTheCutOffFractions()
+        {
+            CameraFit.ReservedBands(new Rect(0f, 96f, 1080f, 2304f - 96f - 192f), 2304f, 0.16f, 0.12f,
+                out float top, out float bottom);
+
+            Assert.That(top, Is.EqualTo(0.16f + 192f / 2304f).Within(Tolerance));
+            Assert.That(bottom, Is.EqualTo(0.12f + 96f / 2304f).Within(Tolerance));
+        }
     }
 }

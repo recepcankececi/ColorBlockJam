@@ -35,6 +35,16 @@ namespace CBJ.Gameplay
             _session = session;
             _board = board;
             _held = null;
+            _wasPressed = false;
+        }
+
+        /// <summary>Stops dragging until the next <see cref="Bind"/>.</summary>
+        public void Unbind()
+        {
+            _session = null;
+            _board = null;
+            _held = null;
+            _wasPressed = false;
         }
 
         private void Update()

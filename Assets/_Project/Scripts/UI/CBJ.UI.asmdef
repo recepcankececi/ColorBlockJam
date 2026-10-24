@@ -4,7 +4,8 @@
   "references": [
     "CBJ.Core",
     "CBJ.Data",
-    "CBJ.Gameplay"
+    "CBJ.Gameplay",
+    "UnityEngine.UI"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

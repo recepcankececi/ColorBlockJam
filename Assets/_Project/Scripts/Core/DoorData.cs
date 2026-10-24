@@ -40,11 +40,5 @@ namespace CBJ.Core
         {
             return slot >= _offset && slot < _offset + _length;
         }
-
-        /// <summary>Creates the runtime door.</summary>
-        public Door ToDoor()
-        {
-            return new Door(_edge, _offset, _length, _colorId);
-        }
     }
 }

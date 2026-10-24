@@ -10,6 +10,22 @@ namespace CBJ.Gameplay
     public static class CameraFit
     {
         /// <summary>
+        /// Screen fractions to keep free at the top and bottom: the UI bands plus whatever the safe area cuts off
+        /// (notch, rounded corners, gesture bar).
+        /// </summary>
+        public static void ReservedBands(Rect safeArea, float screenHeight, float topUi, float bottomUi,
+            out float top, out float bottom)
+        {
+            if (screenHeight <= 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(screenHeight), screenHeight, "Screen height must be positive.");
+            }
+
+            top = topUi + Mathf.Max(0f, screenHeight - safeArea.yMax) / screenHeight;
+            bottom = bottomUi + Mathf.Max(0f, safeArea.yMin) / screenHeight;
+        }
+
+        /// <summary>
         /// Position and orthographic size that show the whole box with <paramref name="padding"/> around it, between
         /// the top and bottom screen fractions kept for the UI.
         /// </summary>

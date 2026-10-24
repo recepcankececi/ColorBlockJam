@@ -3,7 +3,7 @@ using UnityEngine;
 namespace CBJ.Gameplay
 {
     /// <summary>
-    /// One pointer (first touch or the mouse) as drag input reads it, so the input backend can be swapped.
+    /// One pointer (a tracked finger or the mouse) as drag input reads it, so the input backend can be swapped.
     /// </summary>
     public interface IPointerSource
     {

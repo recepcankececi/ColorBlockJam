@@ -45,6 +45,18 @@ namespace CBJ.Gameplay
             StartAttempt();
         }
 
+        /// <summary>True while the current attempt is running (not paused, won, failed or stopped).</summary>
+        public bool IsPlaying => _session != null && _session.State == LevelState.Playing;
+
+        /// <summary>Ends the level in progress without a result and clears the board.</summary>
+        public void Stop()
+        {
+            Unsubscribe();
+            _session = null;
+            _dragInput.Unbind();
+            _boardView.Clear();
+        }
+
         /// <summary>Starts the current level again from its saved start state.</summary>
         public void Restart()
         {
