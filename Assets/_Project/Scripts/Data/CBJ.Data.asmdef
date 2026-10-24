@@ -1,0 +1,16 @@
+{
+  "name": "CBJ.Data",
+  "rootNamespace": "CBJ.Data",
+  "references": [
+    "CBJ.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

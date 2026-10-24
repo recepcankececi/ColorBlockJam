@@ -1,0 +1,17 @@
+{
+  "name": "CBJ.Gameplay",
+  "rootNamespace": "CBJ.Gameplay",
+  "references": [
+    "CBJ.Core",
+    "CBJ.Data"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

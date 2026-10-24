@@ -1,0 +1,29 @@
+{
+  "name": "CBJ.Tests.EditMode",
+  "rootNamespace": "CBJ.Tests.EditMode",
+  "references": [
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner",
+    "CBJ.Core",
+    "CBJ.Data",
+    "CBJ.Gameplay",
+    "CBJ.UI",
+    "CBJ.App",
+    "CBJ.Editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
