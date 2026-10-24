@@ -1,4 +1,5 @@
 using System;
+using CBJ.Data;
 using CBJ.Gameplay;
 using UnityEngine;
 using UnityEngine.UI;
@@ -18,10 +19,10 @@ namespace CBJ.UI
         /// <summary>Raised when the player taps pause.</summary>
         public event Action PauseRequested;
 
-        /// <summary>Shows the level being played (1-based).</summary>
-        public void SetLevelNumber(int levelNumber)
+        /// <summary>Shows the level being played, by catalog position.</summary>
+        public void SetLevel(int catalogIndex)
         {
-            _levelLabel.text = $"Level {levelNumber}";
+            _levelLabel.text = LevelLabel.For(catalogIndex);
         }
 
         private void OnEnable()

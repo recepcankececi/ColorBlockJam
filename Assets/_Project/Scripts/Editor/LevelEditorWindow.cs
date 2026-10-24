@@ -45,7 +45,7 @@ namespace CBJ.Editor
         private bool _dragErases;
         private int _dragUndoGroup;
 
-        private string DisplayName => _asset != null ? _asset.name : "New level";
+        private string DisplayName => _asset != null ? CatalogName(_catalog.IndexOf(_asset), _asset) : "New level";
 
         /// <summary>Opens the level editor.</summary>
         [MenuItem(MenuPath)]
@@ -160,6 +160,12 @@ namespace CBJ.Editor
             }
         }
 
+        // The game shows the catalog position, so the editor leads with it; the asset name only tells files apart.
+        private static string CatalogName(int catalogIndex, LevelDefinition level)
+        {
+            return catalogIndex < 0 ? $"{level.name} (not in catalog)" : $"{LevelLabel.For(catalogIndex)} · {level.name}";
+        }
+
         private void DrawLevelPanel()
         {
             EditorGUILayout.LabelField("Levels (play order)", EditorStyles.boldLabel);
@@ -169,12 +175,12 @@ namespace CBJ.Editor
                 LevelDefinition level = _catalog.Get(i);
                 if (level == null)
                 {
-                    EditorGUILayout.LabelField($"{i + 1}. (missing level)");
+                    EditorGUILayout.LabelField($"{LevelLabel.For(i)} (missing level)");
                     continue;
                 }
 
                 bool selected = level == _asset;
-                if (GUILayout.Toggle(selected, $"{i + 1}. {level.name}", EditorStyles.miniButton) && !selected)
+                if (GUILayout.Toggle(selected, CatalogName(i, level), EditorStyles.miniButton) && !selected)
                 {
                     SwitchTo(level);
                 }

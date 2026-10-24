@@ -1,18 +1,20 @@
 using System;
+using CBJ.Data;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace CBJ.UI
 {
     /// <summary>
-    /// Home: level button, settings button, top bar and tab bar. Tabs, profile, coins and lives are placeholders
-    /// that only give press feedback.
+    /// Home: level button, settings button, coin count, top bar and tab bar. Tabs, profile, the coin button and lives
+    /// are placeholders that only give press feedback.
     /// </summary>
     public sealed class HomeScreen : ScreenView
     {
         [SerializeField] private Button _playButton;
         [SerializeField] private Button _settingsButton;
         [SerializeField] private Text _levelLabel;
+        [SerializeField] private Text _coinsLabel;
 
         /// <summary>Raised when the player taps the level button.</summary>
         public event Action PlayRequested;
@@ -20,10 +22,16 @@ namespace CBJ.UI
         /// <summary>Raised when the player taps the settings button.</summary>
         public event Action SettingsRequested;
 
-        /// <summary>Shows the level the level button will start (1-based).</summary>
-        public void SetLevelNumber(int levelNumber)
+        /// <summary>Shows the level the level button will start, by catalog position.</summary>
+        public void SetLevel(int catalogIndex)
         {
-            _levelLabel.text = $"Level {levelNumber}";
+            _levelLabel.text = LevelLabel.For(catalogIndex);
+        }
+
+        /// <summary>Shows the player's coin count.</summary>
+        public void SetCoins(int coins)
+        {
+            _coinsLabel.text = coins.ToString();
         }
 
         private void OnEnable()

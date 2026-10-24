@@ -3,7 +3,8 @@ using UnityEngine;
 namespace CBJ.Data
 {
     /// <summary>
-    /// Gameplay and presentation tunables: block motion, drag feel, camera framing and the pause after a win.
+    /// Gameplay and presentation tunables: block motion, drag feel, camera framing, the pause after a win and the
+    /// coin reward.
     /// </summary>
     [CreateAssetMenu(fileName = "GameConfig", menuName = "Color Block Jam/Game Config")]
     public sealed class GameConfig : ScriptableObject
@@ -35,6 +36,10 @@ namespace CBJ.Data
         [Tooltip("Seconds between winning a level and the next level starting.")]
         [SerializeField, Min(0f)] private float _levelEndDelay = 1f;
 
+        [Header("Economy")]
+        [Tooltip("Coins the player earns for completing a level.")]
+        [SerializeField, Min(0)] private int _coinsPerWin = 10;
+
         /// <summary>World units per second a block view travels while catching up with its cell.</summary>
         public float BlockSpeed => _blockSpeed;
 
@@ -58,5 +63,8 @@ namespace CBJ.Data
 
         /// <summary>Seconds between winning a level and the next level starting.</summary>
         public float LevelEndDelay => _levelEndDelay;
+
+        /// <summary>Coins the player earns for completing a level.</summary>
+        public int CoinsPerWin => _coinsPerWin;
     }
 }

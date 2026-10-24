@@ -32,17 +32,18 @@ namespace CBJ.UI
             _settings.Bind(settings);
         }
 
-        /// <summary>Shows home with <paramref name="levelNumber"/> (1-based) on the level button.</summary>
-        public void ShowHome(int levelNumber)
+        /// <summary>Shows home with the catalog level <paramref name="levelIndex"/> on the level button and the coin count.</summary>
+        public void ShowHome(int levelIndex, int coins)
         {
-            _home.SetLevelNumber(levelNumber);
+            _home.SetLevel(levelIndex);
+            _home.SetCoins(coins);
             _router.ShowScreen(_home);
         }
 
-        /// <summary>Shows the HUD for <paramref name="levelNumber"/> (1-based); call before the level starts.</summary>
-        public void ShowGameplay(int levelNumber)
+        /// <summary>Shows the HUD for the catalog level <paramref name="levelIndex"/>; call before the level starts.</summary>
+        public void ShowGameplay(int levelIndex)
         {
-            _hud.SetLevelNumber(levelNumber);
+            _hud.SetLevel(levelIndex);
             _router.ShowScreen(_hud);
         }
 

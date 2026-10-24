@@ -7,8 +7,9 @@ using UnityEngine;
 namespace CBJ.App
 {
     /// <summary>
-    /// Composition root (ADR-006) and level flow: hands the assets to the scene systems, opens home (or the level the
-    /// editor asked for), starts the current level on request and moves on to the next level after a win.
+    /// Composition root (ADR-006) and level flow: hands the assets to the scene systems, loads the save, opens home
+    /// (or the level the editor asked for), starts the current level on request and, after a win, pays the coin
+    /// reward, saves the next level and moves on to it.
     /// </summary>
     public sealed class GameBootstrap : MonoBehaviour
     {
@@ -26,7 +27,10 @@ namespace CBJ.App
         [SerializeField] private ScreenFlow _screens;
         [SerializeField] private EventSystemHitTest _uiHitTest;
 
+        private SaveService _save;
+        private GameSettings _settings;
         private int _levelIndex;
+        private bool _isEditorTest;
         private WaitForSeconds _levelEndWait;
         private Coroutine _levelEnd;
 
@@ -37,7 +41,11 @@ namespace CBJ.App
             _dragInput.Initialize(new UIBlockedPointerSource(new LegacyPointerSource(), _uiHitTest),
                 _boardCamera.Camera, _config);
             _levelPlayer.Initialize(_boardView, _boardCamera, _dragInput);
-            _screens.Initialize(new GameSettings());
+            _save = new SaveService(new PlayerPrefsStore());
+            _settings = new GameSettings();
+            _save.LoadSettings(_settings);
+            _screens.Initialize(_settings);
+            _levelIndex = LevelOrder.Resume(_save.LevelIndex, _catalog.Count);
             _levelEndWait = new WaitForSeconds(_config.LevelEndDelay);
         }
 
@@ -47,6 +55,7 @@ namespace CBJ.App
             _levelPlayer.Won += OnLevelWon;
             _screens.PlayRequested += OnPlayRequested;
             _screens.HomeRequested += OnHomeRequested;
+            _settings.Changed += _save.SaveSetting;
         }
 
         private void OnDisable()
@@ -55,6 +64,7 @@ namespace CBJ.App
             _levelPlayer.Won -= OnLevelWon;
             _screens.PlayRequested -= OnPlayRequested;
             _screens.HomeRequested -= OnHomeRequested;
+            _settings.Changed -= _save.SaveSetting;
         }
 
         private void Start()
@@ -65,6 +75,7 @@ namespace CBJ.App
             {
                 if (requested >= 0 && requested < _catalog.Count)
                 {
+                    _isEditorTest = true;
                     PlayLevel(requested);
                     return;
                 }
@@ -72,7 +83,7 @@ namespace CBJ.App
                 Debug.LogWarning($"Level editor asked for catalog level {requested}, which does not exist.", this);
             }
 #endif
-            _screens.ShowHome(_levelIndex + 1);
+            _screens.ShowHome(_levelIndex, _save.Coins);
         }
 
         private void PlayLevel(int index)
@@ -83,17 +94,17 @@ namespace CBJ.App
                 return;
             }
 
-            _levelIndex = index % _catalog.Count;
+            _levelIndex = index;
             LevelDefinition level = _catalog.Get(_levelIndex);
             if (level == null)
             {
                 Debug.LogError($"Catalog entry {_levelIndex} has no level asset.", _catalog);
                 _levelPlayer.Stop();
-                _screens.ShowHome(_levelIndex + 1);
+                _screens.ShowHome(_levelIndex, _save.Coins);
                 return;
             }
 
-            _screens.ShowGameplay(_levelIndex + 1);
+            _screens.ShowGameplay(_levelIndex);
             _levelPlayer.Play(level.Level);
         }
 
@@ -106,13 +117,21 @@ namespace CBJ.App
         {
             CancelLevelEnd();
             _levelPlayer.Stop();
-            _screens.ShowHome(_levelIndex + 1);
+            _screens.ShowHome(_levelIndex, _save.Coins);
         }
 
+        // Reward and progress are saved at the win itself, so quitting during the level-end pause loses neither. A
+        // designer testing a level from the editor must not move the player's saved progress or coins.
         private void OnLevelWon()
         {
             CancelLevelEnd();
-            _levelEnd = StartCoroutine(PlayLevelAfterDelay(_levelIndex + 1));
+            _levelIndex = LevelOrder.Next(_levelIndex, _catalog.Count);
+            if (!_isEditorTest)
+            {
+                _save.CompleteLevel(_levelIndex, _config.CoinsPerWin);
+            }
+
+            _levelEnd = StartCoroutine(PlayLevelAfterDelay(_levelIndex));
         }
 
         // Any new attempt, however it was started, makes a pending level-end step stale.
