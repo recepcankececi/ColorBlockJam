@@ -52,24 +52,58 @@ namespace CBJ.Core
         }
 
         /// <summary>
-        /// Builds a new board with new blocks for one attempt. Throws when the data does not describe a legal board
-        /// (unknown shape, block outside the board or overlapping, door past its edge).
+        /// Builds a new board with new blocks for one attempt. Contiguous doors of one colour on one edge become a
+        /// single door, so a block as wide as their combined span can exit. Throws when the data does not describe a
+        /// legal board (unknown shape, block outside the board or overlapping, door past its edge).
         /// </summary>
         public BoardModel BuildBoard()
         {
-            var doors = new Door[_doors.Count];
-            for (int i = 0; i < doors.Length; i++)
-            {
-                doors[i] = _doors[i].ToDoor();
-            }
-
             var blocks = new Block[_blocks.Count];
             for (int i = 0; i < blocks.Length; i++)
             {
                 blocks[i] = _blocks[i].ToBlock();
             }
 
-            return new BoardModel(_width, _height, doors, blocks);
+            return new BoardModel(_width, _height, MergeDoors(), blocks);
+        }
+
+        // The editor places doors one slot at a time; adjacent same-colour slots read as one opening on screen.
+        private Door[] MergeDoors()
+        {
+            var sorted = new List<DoorData>(_doors);
+            sorted.Sort(CompareByEdgeColourOffset);
+
+            var doors = new List<Door>(sorted.Count);
+            int i = 0;
+            while (i < sorted.Count)
+            {
+                DoorData first = sorted[i];
+                int end = first.Offset + first.Length;
+                int next = i + 1;
+                while (next < sorted.Count && sorted[next].Edge == first.Edge &&
+                       sorted[next].ColorId == first.ColorId && sorted[next].Offset == end)
+                {
+                    end += sorted[next].Length;
+                    next++;
+                }
+
+                doors.Add(new Door(first.Edge, first.Offset, end - first.Offset, first.ColorId));
+                i = next;
+            }
+
+            return doors.ToArray();
+        }
+
+        private static int CompareByEdgeColourOffset(DoorData a, DoorData b)
+        {
+            int byEdge = a.Edge.CompareTo(b.Edge);
+            if (byEdge != 0)
+            {
+                return byEdge;
+            }
+
+            int byColour = a.ColorId.CompareTo(b.ColorId);
+            return byColour != 0 ? byColour : a.Offset.CompareTo(b.Offset);
         }
 
         internal void SetSize(int width, int height)
