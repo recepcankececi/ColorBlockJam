@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00613893de9d68549beb8117f0e685c7, type: 3}
+  m_Name: BoardSkin
+  m_EditorClassIdentifier: 
+  _blockCenter: {fileID: -3289860805121049569, guid: 4409242f69c9ba94ba761075393a0b6d,
+    type: 3}
+  _blockEdge: {fileID: 4163668623295024386, guid: 4409242f69c9ba94ba761075393a0b6d,
+    type: 3}
+  _blockOuterCorner: {fileID: -3023630919892535758, guid: 4409242f69c9ba94ba761075393a0b6d,
+    type: 3}
+  _blockInnerCorner: {fileID: 3222031244701842341, guid: 4409242f69c9ba94ba761075393a0b6d,
+    type: 3}
+  _floorTile: {fileID: 9127120572191758296, guid: 754e288fb59f9c249afa3bafa7bf4f04,
+    type: 3}
+  _wall: {fileID: 8733429697405204941, guid: 0b491d2c975ac914fa2fb907b02b1376, type: 3}
+  _wallCorner: {fileID: 5732635521261682974, guid: 0b491d2c975ac914fa2fb907b02b1376,
+    type: 3}
+  _door: {fileID: -621459505486514712, guid: 0b491d2c975ac914fa2fb907b02b1376, type: 3}
+  _doorArrow: {fileID: 2650694734197125860, guid: 0b491d2c975ac914fa2fb907b02b1376,
+    type: 3}
+  _blockMaterial: {fileID: 2100000, guid: 15f8c445b101b274f9279d76ad938f61, type: 2}
+  _floorMaterial: {fileID: 2100000, guid: 056768d3ce9954447819726dbd082683, type: 2}
+  _wallMaterial: {fileID: 2100000, guid: fa6fa710874528c44abe2af42e69e938, type: 2}
+  _doorMaterial: {fileID: 2100000, guid: 474035004620bfd48b6fff90b22c2c84, type: 2}
+  _arrowMaterial: {fileID: 2100000, guid: 18602fc53e9c77f4cb980dd764149c57, type: 2}

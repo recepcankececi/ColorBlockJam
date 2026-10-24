@@ -1,0 +1,22 @@
+# Unity writes its YAML and text assets with LF; keep them that way so git stops warning and diffs stay clean.
+* text=auto
+*.cs text eol=crlf
+*.unity text eol=lf
+*.prefab text eol=lf
+*.asset text eol=lf
+*.meta text eol=lf
+*.mat text eol=lf
+*.spriteatlas text eol=lf
+*.asmdef text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+
+# Binary assets
+*.fbx binary
+*.png binary
+*.jpg binary
+*.psd binary
+*.wav binary
+*.mp3 binary
+*.ttf binary
+*.otf binary
