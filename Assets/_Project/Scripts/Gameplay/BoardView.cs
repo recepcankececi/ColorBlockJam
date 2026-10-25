@@ -9,7 +9,8 @@ namespace CBJ.Gameplay
 {
     /// <summary>
     /// Builds the board of one attempt from the supplied pieces (floor, wall ring, doors, blocks) and keeps the block
-    /// views in step with the model through its events (ADR-001). All pieces and views are pooled across attempts.
+    /// views in step with the model through its events (ADR-001). Each block's pieces are merged into one mesh, so a
+    /// block is one draw call. All pieces and views are pooled across attempts.
     /// </summary>
     public sealed class BoardView : MonoBehaviour
     {
@@ -41,7 +42,8 @@ namespace CBJ.Gameplay
         private Transform _doorRoot;
         private Transform _blockRoot;
         private Transform _poolRoot;
-        private MeshPiecePool[] _blockPartPools;
+        private BlockMeshBuilder _blockMesh;
+        private Material _blockMaterial;
         private MeshPiecePool _floorPool;
         private MeshPiecePool _wallPool;
         private MeshPiecePool _cornerPool;
@@ -95,11 +97,8 @@ namespace CBJ.Gameplay
             _blockRoot = CreateGroup("Blocks");
             _poolRoot = CreateGroup("Pool");
 
-            _blockPartPools = new MeshPiecePool[(int)BlockPartKind.InnerCorner + 1];
-            _blockPartPools[(int)BlockPartKind.Center] = new MeshPiecePool("BlockCenter", skin.BlockCenter, skin.BlockMaterial, _poolRoot);
-            _blockPartPools[(int)BlockPartKind.Edge] = new MeshPiecePool("BlockEdge", skin.BlockEdge, skin.BlockMaterial, _poolRoot);
-            _blockPartPools[(int)BlockPartKind.OuterCorner] = new MeshPiecePool("BlockOuterCorner", skin.BlockOuterCorner, skin.BlockMaterial, _poolRoot);
-            _blockPartPools[(int)BlockPartKind.InnerCorner] = new MeshPiecePool("BlockInnerCorner", skin.BlockInnerCorner, skin.BlockMaterial, _poolRoot);
+            _blockMesh = new BlockMeshBuilder(skin);
+            _blockMaterial = skin.BlockMaterial;
             _floorPool = new MeshPiecePool("FloorTile", skin.FloorTile, skin.FloorMaterial, _poolRoot);
             _wallPool = new MeshPiecePool("Wall", skin.Wall, skin.WallMaterial, _poolRoot);
             _cornerPool = new MeshPiecePool("WallCorner", skin.WallCorner, skin.WallMaterial, _poolRoot);
@@ -322,8 +321,8 @@ namespace CBJ.Gameplay
             _blockViews.Add(view);
             _viewsByBlock.Add(block, view);
 
-            SetTint(block.ColorId);
             BlockPartLayout.Build(block.Shape, _partBuffer);
+            _blockMesh.Begin();
             for (int i = 0; i < _partBuffer.Count; i++)
             {
                 BlockPart part = _partBuffer[i];
@@ -334,8 +333,12 @@ namespace CBJ.Gameplay
                     position += turn * QuadrantPivotOffset;
                 }
 
-                view.Pieces.Add(_blockPartPools[(int)part.Kind], view.transform, position, turn * BlockPartUpright, _tint);
+                _blockMesh.Add(part.Kind, position, turn * BlockPartUpright);
             }
+
+            _blockMesh.WriteTo(view.Mesh);
+            SetTint(block.ColorId);
+            view.Renderer.SetPropertyBlock(_tint);
         }
 
         private void SetTint(int colorId)
@@ -353,7 +356,9 @@ namespace CBJ.Gameplay
 
         private BlockView CreateBlockView()
         {
-            return CreatePooledView("Block").AddComponent<BlockView>();
+            var view = CreatePooledView("Block").AddComponent<BlockView>();
+            view.Initialize(_blockMaterial);
+            return view;
         }
 
         private DoorView CreateDoorView()

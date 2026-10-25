@@ -8,7 +8,7 @@ namespace CBJ.Editor
 {
     /// <summary>
     /// Preset shapes for the level editor's stamps (ADR-007), addressed by a stable id. Level data stores cells, not
-    /// these ids; the ids remain so <see cref="LevelMigration"/> can convert levels saved before that change.
+    /// these ids.
     /// </summary>
     public static class ShapeLibrary
     {
@@ -42,7 +42,7 @@ namespace CBJ.Editor
             StampIds = OrderedStampIds.AsReadOnly();
         }
 
-        /// <summary>Every shape id, including each rotation that levels saved before ADR-007 may name.</summary>
+        /// <summary>Every shape id, each rotation of a stamp included.</summary>
         public static ReadOnlyCollection<string> Ids { get; }
 
         /// <summary>One id per shape, in palette order; the stamp's R key gives the other orientations.</summary>

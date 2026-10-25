@@ -4,17 +4,29 @@ using UnityEngine;
 namespace CBJ.Gameplay
 {
     /// <summary>
-    /// Draws one <see cref="CBJ.Core.Block"/> from pooled modular pieces and glides it towards the cell the model moved it to.
-    /// Idle views are disabled, so only moving blocks run an update.
+    /// Draws one <see cref="CBJ.Core.Block"/> as a single merged mesh and glides it towards the cell the model moved it
+    /// to. The view keeps its mesh while pooled and refills it for the next block. Idle views are disabled, so only
+    /// moving blocks run an update.
     /// </summary>
     public sealed class BlockView : MonoBehaviour
     {
-        private readonly PieceSet _pieces = new PieceSet();
+        private Mesh _mesh;
+        private MeshRenderer _renderer;
         private Vector3 _target;
         private float _speed;
         private Action<BlockView> _exitFinished;
 
-        internal PieceSet Pieces => _pieces;
+        internal Mesh Mesh => _mesh;
+
+        internal MeshRenderer Renderer => _renderer;
+
+        internal void Initialize(Material material)
+        {
+            _mesh = new Mesh { name = "BlockMesh" };
+            gameObject.AddComponent<MeshFilter>().sharedMesh = _mesh;
+            _renderer = gameObject.AddComponent<MeshRenderer>();
+            _renderer.sharedMaterial = material;
+        }
 
         internal void Show(Vector3 localPosition, float speed)
         {
@@ -38,9 +50,15 @@ namespace CBJ.Gameplay
 
         internal void ResetForPool()
         {
-            _pieces.ReleaseAll();
+            _mesh.Clear();
+            _renderer.SetPropertyBlock(null);
             _exitFinished = null;
             enabled = false;
+        }
+
+        private void OnDestroy()
+        {
+            Destroy(_mesh);
         }
 
         private void Update()

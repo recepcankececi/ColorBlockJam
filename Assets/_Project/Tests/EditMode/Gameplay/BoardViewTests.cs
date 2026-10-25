@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using CBJ.Core;
 using CBJ.Data;
@@ -6,6 +7,7 @@ using CBJ.Tests.EditMode.Core;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace CBJ.Tests.EditMode.Gameplay
 {
@@ -26,15 +28,17 @@ namespace CBJ.Tests.EditMode.Gameplay
         private GameObject _root;
         private BoardView _view;
         private BlockPalette _palette;
+        private BoardSkin _skin;
 
         [SetUp]
         public void SetUp()
         {
             _palette = AssetDatabase.LoadAssetAtPath<BlockPalette>(SettingsFolder + "BlockPalette.asset");
+            _skin = AssetDatabase.LoadAssetAtPath<BoardSkin>(SettingsFolder + "BoardSkin.asset");
             _root = new GameObject("BoardViewTest");
             _view = _root.AddComponent<BoardView>();
             _view.Initialize(
-                AssetDatabase.LoadAssetAtPath<BoardSkin>(SettingsFolder + "BoardSkin.asset"),
+                _skin,
                 _palette,
                 AssetDatabase.LoadAssetAtPath<GameConfig>(SettingsFolder + "GameConfig.asset"));
         }
@@ -42,6 +46,12 @@ namespace CBJ.Tests.EditMode.Gameplay
         [TearDown]
         public void TearDown()
         {
+            // Block views own a runtime mesh, and OnDestroy does not run in edit mode.
+            foreach (BlockView block in _root.GetComponentsInChildren<BlockView>(true))
+            {
+                Object.DestroyImmediate(block.GetComponent<MeshFilter>().sharedMesh);
+            }
+
             Object.DestroyImmediate(_root);
         }
 
@@ -93,6 +103,46 @@ namespace CBJ.Tests.EditMode.Gameplay
         }
 
         [Test]
+        public void Show_Block_DrawsWithOneRenderer()
+        {
+            _view.Show(SampleLevel().BuildBoard());
+
+            BlockView block = _root.GetComponentsInChildren<BlockView>().Single();
+            Assert.That(block.GetComponentsInChildren<MeshRenderer>().Length, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Show_Block_MergesEveryPieceIntoItsMesh()
+        {
+            _view.Show(SampleLevel().BuildBoard());
+
+            Mesh merged = _root.GetComponentInChildren<BlockView>().GetComponent<MeshFilter>().sharedMesh;
+            Assert.That(merged.vertexCount, Is.EqualTo(PieceVertexCount(TestShapes.L)));
+        }
+
+        [Test]
+        public void Show_BlockBeyondSixteenBitVertices_UsesThirtyTwoBitIndices()
+        {
+            const int side = 12;
+            var cells = new List<Vector2Int>();
+            for (int y = 0; y < side; y++)
+            {
+                for (int x = 0; x < side; x++)
+                {
+                    cells.Add(new Vector2Int(x, y));
+                }
+            }
+
+            var level = new LevelData(side, side, 30);
+            level.AddBlock(new BlockData(cells, Vector2Int.zero, Red));
+            _view.Show(level.BuildBoard());
+
+            Mesh merged = _root.GetComponentInChildren<BlockView>().GetComponent<MeshFilter>().sharedMesh;
+            Assert.That(merged.vertexCount, Is.GreaterThan(ushort.MaxValue));
+            Assert.That(merged.indexFormat, Is.EqualTo(IndexFormat.UInt32));
+        }
+
+        [Test]
         public void Show_SecondAttempt_ReusesThePooledPieces()
         {
             LevelData level = SampleLevel();
@@ -123,6 +173,14 @@ namespace CBJ.Tests.EditMode.Gameplay
             _view.TryRaycast(new Ray(above, Vector3.down), out Vector2 cellPoint);
 
             Assert.That(Vector2Int.FloorToInt(cellPoint), Is.EqualTo(new Vector2Int(2, 1)));
+        }
+
+        private int PieceVertexCount(BlockShape shape)
+        {
+            var parts = new List<BlockPart>();
+            BlockPartLayout.Build(shape, parts);
+            Mesh[] pieces = { _skin.BlockCenter, _skin.BlockEdge, _skin.BlockOuterCorner, _skin.BlockInnerCorner };
+            return parts.Sum(part => pieces[(int)part.Kind].vertexCount);
         }
 
         private int ActiveRenderersUnder(string group)

@@ -1,0 +1,71 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e3416dfd3f0035e4fb2d8fea0ea70541, type: 3}
+  m_Name: Level_04
+  m_EditorClassIdentifier: 
+  _level:
+    _width: 5
+    _height: 6
+    _timerSeconds: 300
+    _doors:
+    - _edge: 0
+      _offset: 0
+      _length: 1
+      _colorId: 3
+    - _edge: 0
+      _offset: 1
+      _length: 1
+      _colorId: 3
+    - _edge: 3
+      _offset: 1
+      _length: 1
+      _colorId: 5
+    - _edge: 3
+      _offset: 0
+      _length: 1
+      _colorId: 5
+    - _edge: 1
+      _offset: 3
+      _length: 1
+      _colorId: 1
+    - _edge: 1
+      _offset: 4
+      _length: 1
+      _colorId: 1
+    - _edge: 2
+      _offset: 5
+      _length: 1
+      _colorId: 5
+    - _edge: 2
+      _offset: 4
+      _length: 1
+      _colorId: 5
+    _blocks:
+    - _cells:
+      - {x: 0, y: 0}
+      - {x: 1, y: 0}
+      - {x: 0, y: 1}
+      - {x: 1, y: 1}
+      _origin: {x: 0, y: 3}
+      _colorId: 1
+    - _cells:
+      - {x: 0, y: 0}
+      - {x: 0, y: 1}
+      _origin: {x: 2, y: 2}
+      _colorId: 5
+    - _cells:
+      - {x: 0, y: 0}
+      - {x: 1, y: 0}
+      - {x: 0, y: 1}
+      - {x: 1, y: 1}
+      _origin: {x: 3, y: 1}
+      _colorId: 3

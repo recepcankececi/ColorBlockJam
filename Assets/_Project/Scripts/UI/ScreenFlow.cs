@@ -86,6 +86,16 @@ namespace CBJ.UI
             _levelPlayer.Failed -= OnLevelFailed;
         }
 
+        // Leaving the app mid-level (home button, call, lock screen) pauses the attempt so the countdown does not run
+        // out in the background and the player comes back to the pause popup.
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused)
+            {
+                OnPauseRequested();
+            }
+        }
+
         private void OnPlayRequested()
         {
             PlayRequested?.Invoke();
