@@ -29,6 +29,10 @@ namespace CBJ.Data
         [SerializeField] private Material _doorMaterial;
         [SerializeField] private Material _arrowMaterial;
 
+        [Header("Held block shadow")]
+        [SerializeField] private Mesh _shadowMesh;
+        [SerializeField] private Material _shadowMaterial;
+
         /// <summary>Block quadrant with no outer side.</summary>
         public Mesh BlockCenter => _blockCenter;
 
@@ -70,5 +74,11 @@ namespace CBJ.Data
 
         /// <summary>Material of door arrows.</summary>
         public Material ArrowMaterial => _arrowMaterial;
+
+        /// <summary>Flat quad (facing -Z as modelled) drawn under a held block.</summary>
+        public Mesh ShadowMesh => _shadowMesh;
+
+        /// <summary>Shared translucent material of the held-block shadow.</summary>
+        public Material ShadowMaterial => _shadowMaterial;
     }
 }

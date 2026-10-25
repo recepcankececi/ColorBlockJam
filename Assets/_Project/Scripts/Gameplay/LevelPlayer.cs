@@ -15,6 +15,7 @@ namespace CBJ.Gameplay
         private DragInput _dragInput;
         private LevelSession _session;
         private bool _subscribed;
+        private bool _wasPlaying;
 
         /// <summary>Raised whenever an attempt starts: a new level or a restart.</summary>
         public event Action AttemptStarted;
@@ -27,6 +28,9 @@ namespace CBJ.Gameplay
 
         /// <summary>Raised when the current attempt runs out of time.</summary>
         public event Action Failed;
+
+        /// <summary>Raised when <see cref="IsPlaying"/> changes: pause, resume, win, fail, stop or a new attempt.</summary>
+        public event Action<bool> RunningChanged;
 
         /// <summary>Sets the scene collaborators; call once before <see cref="Play"/>.</summary>
         public void Initialize(BoardView boardView, BoardCamera boardCamera, DragInput dragInput)
@@ -55,6 +59,7 @@ namespace CBJ.Gameplay
             _session = null;
             _dragInput.Unbind();
             _boardView.Clear();
+            NotifyRunning();
         }
 
         /// <summary>Starts the current level again from its saved start state.</summary>
@@ -70,12 +75,14 @@ namespace CBJ.Gameplay
         public void Pause()
         {
             _session?.Pause();
+            NotifyRunning();
         }
 
         /// <summary>Continues after <see cref="Pause"/>.</summary>
         public void Resume()
         {
             _session?.Resume();
+            NotifyRunning();
         }
 
         private void StartAttempt()
@@ -85,6 +92,7 @@ namespace CBJ.Gameplay
             _boardView.Show(_session.Board);
             _boardCamera.Frame(_boardView.WorldBounds);
             _dragInput.Bind(_session, _boardView);
+            NotifyRunning();
         }
 
         private void OnEnable()
@@ -130,12 +138,24 @@ namespace CBJ.Gameplay
 
         private void OnWon()
         {
+            NotifyRunning();
             Won?.Invoke();
         }
 
         private void OnFailed()
         {
+            NotifyRunning();
             Failed?.Invoke();
+        }
+
+        private void NotifyRunning()
+        {
+            bool playing = IsPlaying;
+            if (playing != _wasPlaying)
+            {
+                _wasPlaying = playing;
+                RunningChanged?.Invoke(playing);
+            }
         }
 
         private void OnDisplaySecondsChanged(int seconds)

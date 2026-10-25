@@ -111,6 +111,12 @@ namespace CBJ.Gameplay
             return State == LevelState.Playing ? _resolver.TryStep(block, direction) : StepResult.Blocked;
         }
 
+        /// <summary>What <see cref="TryStep"/> would do now, without moving anything.</summary>
+        public StepResult Probe(Block block, Direction direction)
+        {
+            return State == LevelState.Playing ? _resolver.Probe(block, direction) : StepResult.Blocked;
+        }
+
         private void OnBoardCleared()
         {
             State = LevelState.Won;

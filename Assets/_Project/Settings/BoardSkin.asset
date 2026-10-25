@@ -33,3 +33,5 @@ MonoBehaviour:
   _wallMaterial: {fileID: 2100000, guid: fa6fa710874528c44abe2af42e69e938, type: 2}
   _doorMaterial: {fileID: 2100000, guid: 474035004620bfd48b6fff90b22c2c84, type: 2}
   _arrowMaterial: {fileID: 2100000, guid: 18602fc53e9c77f4cb980dd764149c57, type: 2}
+  _shadowMesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
+  _shadowMaterial: {fileID: 2100000, guid: 9bf3e7f9915d29744a4876c94589a409, type: 2}

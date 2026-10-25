@@ -10,11 +10,15 @@ namespace CBJ.Gameplay
     /// <summary>
     /// Builds the board of one attempt from the supplied pieces (floor, wall ring, doors, blocks) and keeps the block
     /// views in step with the model through its events (ADR-001). Each block's pieces are merged into one mesh, so a
-    /// block is one draw call. All pieces and views are pooled across attempts.
+    /// block is one draw call. Drag input lifts, offsets and drops a block's view here; the view never changes the
+    /// model. All pieces and views are pooled across attempts.
     /// </summary>
     public sealed class BoardView : MonoBehaviour
     {
-        private const int ExitClearanceCells = 1;
+        private const int ExitTravelCells = 1;
+
+        // Lifts the shadow off the floor tiles so the two never z-fight.
+        private const float ShadowClearance = 0.02f;
         private const float QuarterTurnDegrees = 90f;
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -25,6 +29,9 @@ namespace CBJ.Gameplay
         // The supplied wall, door and arrow pieces are modelled upside down: their capped side faces -Y.
         private static readonly Quaternion WallPieceUpright = Quaternion.Euler(0f, 0f, 180f);
 
+        // The supplied quad faces -Z; turned, it lies on the floor facing up.
+        private static readonly Quaternion ShadowFlat = Quaternion.Euler(90f, 0f, 0f);
+
         // Quadrant pieces have their pivot on a footprint corner; the inner corner is centred on its pivot.
         private static readonly Vector3 QuadrantPivotOffset = new Vector3(-0.5f, 0f, -0.5f);
 
@@ -32,6 +39,7 @@ namespace CBJ.Gameplay
         private readonly List<BlockView> _blockViews = new List<BlockView>();
         private readonly List<DoorView> _doorViews = new List<DoorView>();
         private readonly Dictionary<Block, BlockView> _viewsByBlock = new Dictionary<Block, BlockView>();
+        private readonly Dictionary<Door, DoorView> _viewsByDoor = new Dictionary<Door, DoorView>();
         private readonly List<BlockPart> _partBuffer = new List<BlockPart>();
 
         private BlockPalette _palette;
@@ -49,9 +57,15 @@ namespace CBJ.Gameplay
         private MeshPiecePool _cornerPool;
         private MeshPiecePool _doorPool;
         private MeshPiecePool _arrowPool;
+        private MeshPiecePool _shadowPool;
+        private MeshRenderer _shadow;
+        private BlockView _shadowOwner;
         private ObjectPool<BlockView> _blockViewPool;
         private ObjectPool<DoorView> _doorViewPool;
         private Action<BlockView> _onExitFinished;
+        private Action<BlockView> _onDropped;
+        private Vector3 _shadowOffset;
+        private float _doorDepth;
         private float _pickHeight;
         private float _boundsBottom;
         private float _boundsTop;
@@ -82,6 +96,7 @@ namespace CBJ.Gameplay
             _config = config;
             _tint = new MaterialPropertyBlock();
             _onExitFinished = OnExitFinished;
+            _onDropped = OnDropped;
 
             // Heights come from the supplied meshes, the wall pieces measured after their flip: blocks are picked on
             // their top face (-Z as modelled), a wall's cap stands just above the floor while its outer side runs far
@@ -90,6 +105,8 @@ namespace CBJ.Gameplay
             _boundsBottom = -skin.Wall.bounds.max.y;
             _boundsTop = Mathf.Max(-skin.Wall.bounds.min.y, _pickHeight);
             _arrowOffset = new Vector3(0f, skin.DoorArrow.bounds.max.y - skin.Door.bounds.min.y, 0f);
+            _doorDepth = -skin.Door.bounds.min.y;
+            _shadowOffset = new Vector3(0f, skin.FloorTile.bounds.max.y + ShadowClearance, 0f);
 
             _floorRoot = CreateGroup("Floor");
             _wallRoot = CreateGroup("Walls");
@@ -104,6 +121,7 @@ namespace CBJ.Gameplay
             _cornerPool = new MeshPiecePool("WallCorner", skin.WallCorner, skin.WallMaterial, _poolRoot);
             _doorPool = new MeshPiecePool("DoorFrame", skin.Door, skin.DoorMaterial, _poolRoot);
             _arrowPool = new MeshPiecePool("DoorArrow", skin.DoorArrow, skin.ArrowMaterial, _poolRoot);
+            _shadowPool = new MeshPiecePool("BlockShadow", skin.ShadowMesh, skin.ShadowMaterial, _poolRoot);
 
             _blockViewPool = new ObjectPool<BlockView>(CreateBlockView, actionOnRelease: OnBlockViewRelease);
             _doorViewPool = new ObjectPool<DoorView>(CreateDoorView, actionOnRelease: OnDoorViewRelease);
@@ -139,6 +157,7 @@ namespace CBJ.Gameplay
         {
             Unsubscribe();
             _board = null;
+            ReleaseShadow();
             for (int i = 0; i < _blockViews.Count; i++)
             {
                 _blockViewPool.Release(_blockViews[i]);
@@ -152,7 +171,35 @@ namespace CBJ.Gameplay
             _blockViews.Clear();
             _doorViews.Clear();
             _viewsByBlock.Clear();
+            _viewsByDoor.Clear();
             _boardPieces.ReleaseAll();
+        }
+
+        /// <summary>Lifts the view of <paramref name="block"/> off the board and casts its shadow.</summary>
+        public void Lift(Block block)
+        {
+            BlockView view = _viewsByBlock[block];
+            ReleaseShadow();
+            _shadow = _shadowPool.Get(_blockRoot, Vector3.zero, ShadowFlat);
+            _shadowOwner = view;
+            float spread = _config.ShadowSpread * BoardLayout.CellSize;
+            var scale = new Vector3(block.Shape.Width * spread, block.Shape.Height * spread, 1f);
+            view.Lift(_shadow.transform, scale, _shadowOffset, _onDropped);
+        }
+
+        /// <summary>Shows the held <paramref name="block"/> <paramref name="offsetCells"/> away from its model cell.</summary>
+        public void Hold(Block block, Vector2 offsetCells)
+        {
+            _viewsByBlock[block].Hold(new Vector3(offsetCells.x, 0f, offsetCells.y) * BoardLayout.CellSize);
+        }
+
+        /// <summary>Lets the view of <paramref name="block"/> settle back onto its cell and drop.</summary>
+        public void Drop(Block block)
+        {
+            if (_viewsByBlock.TryGetValue(block, out BlockView view))
+            {
+                view.Drop();
+            }
         }
 
         /// <summary>
@@ -220,15 +267,41 @@ namespace CBJ.Gameplay
         {
             BlockView view = _viewsByBlock[block];
             _viewsByBlock.Remove(block);
-            int extent = door.Edge.IsVertical() ? block.Shape.Height : block.Shape.Width;
-            Vector2 exit = (Vector2)(block.Origin + door.Edge.ToOffset() * (extent + ExitClearanceCells));
+            if (_shadowOwner == view)
+            {
+                ReleaseShadow();
+            }
+
+            Vector2 exit = block.Origin + door.Edge.ToOffset() * ExitTravelCells;
             view.Exit(Layout.ToLocal(exit), _onExitFinished);
+            _viewsByDoor[door].Open(_doorDepth, _config.DoorSinkDuration, _config.ExitDuration);
         }
 
         private void OnExitFinished(BlockView view)
         {
             _blockViews.Remove(view);
             _blockViewPool.Release(view);
+        }
+
+        private void OnDropped(BlockView view)
+        {
+            if (_shadowOwner == view)
+            {
+                ReleaseShadow();
+            }
+        }
+
+        private void ReleaseShadow()
+        {
+            if (_shadow == null)
+            {
+                return;
+            }
+
+            _shadowOwner.DetachShadow();
+            _shadowPool.Release(_shadow);
+            _shadow = null;
+            _shadowOwner = null;
         }
 
         private void BuildFloor()
@@ -301,15 +374,14 @@ namespace CBJ.Gameplay
             view.transform.SetParent(_doorRoot, false);
             view.gameObject.SetActive(true);
             _doorViews.Add(view);
+            _viewsByDoor.Add(door, view);
 
+            // One frame piece covers one cell along the edge; stretched, it spans the whole merged door.
             SetTint(door.ColorId);
             Quaternion facing = Turn(BoardLayout.QuarterTurns(door.Edge)) * WallPieceUpright;
-            for (int slot = door.Offset; slot < door.Offset + door.Length; slot++)
-            {
-                Vector3 position = Layout.EdgePoint(door.Edge, slot + 0.5f);
-                view.Pieces.Add(_doorPool, view.transform, position, facing, _tint);
-                view.Pieces.Add(_arrowPool, view.transform, position + _arrowOffset, facing, null);
-            }
+            Vector3 center = Layout.EdgePoint(door.Edge, door.Offset + door.Length * 0.5f);
+            view.Pieces.Add(_doorPool, view.transform, center, facing, new Vector3(door.Length, 1f, 1f), _tint);
+            view.Pieces.Add(_arrowPool, view.transform, center + _arrowOffset, facing, null);
         }
 
         private void BuildBlock(Block block)
@@ -317,7 +389,8 @@ namespace CBJ.Gameplay
             BlockView view = _blockViewPool.Get();
             view.transform.SetParent(_blockRoot, false);
             view.gameObject.SetActive(true);
-            view.Show(Layout.ToLocal(block.Origin), _config.BlockSpeed);
+            var pivot = new Vector3(block.Shape.Width, 0f, block.Shape.Height) * (BoardLayout.CellSize * 0.5f);
+            view.Show(Layout.ToLocal(block.Origin), pivot);
             _blockViews.Add(view);
             _viewsByBlock.Add(block, view);
 
@@ -357,7 +430,7 @@ namespace CBJ.Gameplay
         private BlockView CreateBlockView()
         {
             var view = CreatePooledView("Block").AddComponent<BlockView>();
-            view.Initialize(_blockMaterial);
+            view.Initialize(_blockMaterial, _config);
             return view;
         }
 

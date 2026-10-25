@@ -29,3 +29,5 @@ MonoBehaviour:
     _color: {r: 0.96, g: 0.45, b: 0.71, a: 1}
   - _name: Cyan
     _color: {r: 0.25, g: 0.82, b: 0.86, a: 1}
+  - _name: Dark Green
+    _color: {r: 0.11764706, g: 0.47843137, b: 0.23529412, a: 1}

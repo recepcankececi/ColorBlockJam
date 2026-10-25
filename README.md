@@ -63,9 +63,11 @@ Decisions and why:
   (`BlockMoved`, `BlockExited`, `Cleared`) and never poll; the model does not know the views exist. A new block
   type is a model rule plus a view, and the editor and the game share the same data.
 - **Cell-snapped sliding (ADR-002).** The drag is projected onto its dominant axis and the block advances one cell
-  at a time with a collision check per step; the view glides between cells. This is deterministic and fully
-  testable, and avoids the corner-snagging and float issues of continuous sweeps. A block exits when it is pushed
-  into a door of its colour whose width fits the block's side and every cell has a clear path to the edge.
+  at a time with a collision check per step. This is deterministic and fully testable, and avoids the
+  corner-snagging and float issues of continuous sweeps. The view still follows the finger continuously: it may
+  lead its model cell by up to half a cell where the model allows the move, and the model steps when the view
+  crosses into the next cell (`BlockDrag`, pure and tested). A block exits when it is moved into a door of its
+  colour whose width fits the block's side and every cell has a clear path to the edge.
 - **One level format: `LevelData` inside a `LevelDefinition` ScriptableObject, ordered by `LevelCatalog`
   (ADR-003).** Unity-native, referenced by drag and drop, inspectable, no file management. `LevelData` is a plain
   serializable class, so moving to JSON later would be one serializer. The game only reads it; edits go through
@@ -107,7 +109,8 @@ first to the last script update of each frame.
 
 Script allocations were already zero, so the change only targeted renderers: 182 block-piece renderers became 15
 block renderers. The remaining non-batched draws are the 22 tinted door frames; floor, walls and arrows go through
-the SRP Batcher. Not measured on a device yet.
+the SRP Batcher. Not measured on a device yet. Since then each merged door is drawn as one stretched frame with one
+arrow, so a door is one tinted renderer whatever its width.
 
 ## Decisions on unclear requirements
 
@@ -117,6 +120,16 @@ the SRP Batcher. Not measured on a device yet.
   door cell.
 - **Exit rule:** a block leaves through a door of its colour only if its side fits the door's width and every
   cell has a clear path to that edge (so concave shapes cannot clip through walls). The exit happens in one step.
+- **Auto-exit:** after every step a drag commits, a block that touches an edge whose door lets it out leaves at
+  once (the drag direction is tried first), so the player never has to push past the edge. A block that starts a
+  level already next to its door still has to be dragged into it.
+- **Drag feel:** a grabbed block lifts slightly and casts a soft shadow (a rounded quad from the supplied
+  `SquareRoundedMask`, sized to the block's bounding box, so L shapes get a rectangular shadow). It follows the
+  finger along one axis; the axis can change only while the block is close to its cell. Released, it eases back
+  onto its cell and drops.
+- **Exit animation:** the block slides one cell out through the door and shrinks away while the door sinks to the
+  board surface, then the door rises again. Only model events drive it. Pause freezes the timer and input only;
+  an exit or settle already under way finishes behind the Pause popup.
 - **Validation** (optional O1) is static only: board size, timer, overlapping or out-of-range blocks and doors,
   and whether every block has a door of its colour wide enough. There is no solver. A level with errors cannot be
   saved or played from the editor; an empty level cannot be played.
@@ -128,14 +141,21 @@ the SRP Batcher. Not measured on a device yet.
   win popup); after the last level the game wraps to level 1. A fail opens a popup with Retry and Home.
 - **Leaving the app** mid-level (home button, call, lock screen) pauses the attempt and shows the Pause popup on
   return, so the timer does not run out in the background.
-- **Coins** are shown on Home only; there is no coin animation in gameplay.
+- **Coins** are shown on Home and in the HUD; the HUD count updates when a win pays the reward (no coin
+  animation).
+- **HUD restart** works only while the attempt runs (not while paused, nor after a win, when the reward and the
+  next level are already saved). The Pause and Fail popups keep their own restart.
+- **Boosters** are placeholders: the first shows a count badge, the other three are locked with an unlock level;
+  all give press feedback only.
+- **Low time:** under 10 seconds the timer turns red and pulses; the pulse stops on pause and fail.
 - **Saved progress** is a catalog index: if the catalog shrinks below it, progress restarts at level 1.
 - **Settings toggles** (vibration, sound, music) show a distinct on/off state and are saved; only an "On" sprite
   was supplied, so "Off" is the same art tinted grey with an "Off" label. The game has no audio or haptics.
 - **Placeholders** (tabs, boosters, profile, lives, other buttons) give press feedback only.
-- **Camera:** orthographic, pitched 75° (set in `GameConfig`), framed to the board between the HUD bands.
-  Supplied block pieces are 1-unit quadrants, so a cell is 2 world units; door arrows are drawn white on top of the
-  tinted door.
+- **Camera:** orthographic, pitched 60° (set in `GameConfig`), framed to the board between the HUD bands. 60–65°
+  all fit every level at 9:16 and 20:9 (the fit is width-bound); 60° gives tall boards the most room. Supplied
+  block pieces are 1-unit quadrants, so a cell is 2 world units; each door has one white arrow in its middle.
+- **Palette:** colour ids are palette indices, so new colours are only appended (Dark Green is id 8).
 - **Text** uses uGUI legacy `Text` with the built-in font (TextMesh Pro resources are not imported).
 - **Restart** goes from the UI straight to the level player, while Play and Home go through the game flow; restart
   does not change which level is played.
@@ -145,7 +165,7 @@ the SRP Batcher. Not measured on a device yet.
 - No Android back-button handling.
 - Reordering levels in the catalog moves a player's saved index to a different level.
 - Reserved UI bands are screen fractions: correct from 16:9 to 20:9, not tuned for 3:4 tablets.
-- Door frames are still one renderer per door cell with their own tint, so they are not SRP-batched.
+- Door frames are one tinted renderer per door, so they are not SRP-batched.
 - A level edited by hand into an invalid state and added to the catalog is not guarded at runtime; the editor is
   the only checked path.
 - `BlockData.Cells` exposes its backing list (read-only interface, but castable).

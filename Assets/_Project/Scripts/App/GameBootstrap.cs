@@ -104,7 +104,7 @@ namespace CBJ.App
                 return;
             }
 
-            _screens.ShowGameplay(_levelIndex);
+            _screens.ShowGameplay(_levelIndex, _save.Coins);
             _levelPlayer.Play(level.Level);
         }
 
@@ -129,6 +129,7 @@ namespace CBJ.App
             if (!_isEditorTest)
             {
                 _save.CompleteLevel(_levelIndex, _config.CoinsPerWin);
+                _screens.SetCoins(_save.Coins);
             }
 
             _levelEnd = StartCoroutine(PlayLevelAfterDelay(_levelIndex));

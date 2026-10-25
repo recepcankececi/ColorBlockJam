@@ -19,7 +19,7 @@ namespace CBJ.UI
         [SerializeField] private AnimationCurve _curve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
 
         private Vector3 _restScale;
-        private float _progress;
+        private CurveTween _tween;
         private bool _pressed;
 
         /// <inheritdoc />
@@ -48,20 +48,18 @@ namespace CBJ.UI
         private void OnDisable()
         {
             _pressed = false;
-            _progress = 0f;
+            _tween.Snap(0f);
             transform.localScale = _restScale;
         }
 
         private void Update()
         {
-            float target = _pressed ? 1f : 0f;
-            if (Mathf.Approximately(_progress, target))
+            if (!_tween.Advance(_pressed ? 1f : 0f, Time.unscaledDeltaTime, _duration))
             {
                 return;
             }
 
-            _progress = Mathf.MoveTowards(_progress, target, Time.unscaledDeltaTime / _duration);
-            transform.localScale = _restScale * Mathf.LerpUnclamped(1f, _pressedScale, _curve.Evaluate(_progress));
+            transform.localScale = _restScale * Mathf.LerpUnclamped(1f, _pressedScale, _tween.Evaluate(_curve));
         }
     }
 }

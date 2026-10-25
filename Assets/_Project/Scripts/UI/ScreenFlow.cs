@@ -40,11 +40,19 @@ namespace CBJ.UI
             _router.ShowScreen(_home);
         }
 
-        /// <summary>Shows the HUD for the catalog level <paramref name="levelIndex"/>; call before the level starts.</summary>
-        public void ShowGameplay(int levelIndex)
+        /// <summary>Shows the HUD for the catalog level <paramref name="levelIndex"/> and the coin count; call before the level starts.</summary>
+        public void ShowGameplay(int levelIndex, int coins)
         {
             _hud.SetLevel(levelIndex);
+            _hud.SetCoins(coins);
             _router.ShowScreen(_hud);
+        }
+
+        /// <summary>Updates the coin count wherever it is shown, e.g. after a win paid the reward.</summary>
+        public void SetCoins(int coins)
+        {
+            _home.SetCoins(coins);
+            _hud.SetCoins(coins);
         }
 
         private void Awake()
@@ -62,6 +70,7 @@ namespace CBJ.UI
             _home.SettingsRequested += OnSettingsRequested;
             _settings.CloseRequested += OnPopupCloseRequested;
             _hud.PauseRequested += OnPauseRequested;
+            _hud.RestartRequested += OnHudRestartRequested;
             _pause.ResumeRequested += OnResumeRequested;
             _pause.RestartRequested += OnRestartRequested;
             _pause.HomeRequested += OnHomeRequested;
@@ -77,6 +86,7 @@ namespace CBJ.UI
             _home.SettingsRequested -= OnSettingsRequested;
             _settings.CloseRequested -= OnPopupCloseRequested;
             _hud.PauseRequested -= OnPauseRequested;
+            _hud.RestartRequested -= OnHudRestartRequested;
             _pause.ResumeRequested -= OnResumeRequested;
             _pause.RestartRequested -= OnRestartRequested;
             _pause.HomeRequested -= OnHomeRequested;
@@ -132,6 +142,16 @@ namespace CBJ.UI
         private void OnRestartRequested()
         {
             _levelPlayer.Restart();
+        }
+
+        // Like pause, only a running attempt restarts from the HUD: after a win the reward and the next level are
+        // already committed.
+        private void OnHudRestartRequested()
+        {
+            if (_levelPlayer.IsPlaying)
+            {
+                _levelPlayer.Restart();
+            }
         }
 
         private void OnHomeRequested()

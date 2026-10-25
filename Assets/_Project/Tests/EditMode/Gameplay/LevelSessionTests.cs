@@ -107,6 +107,28 @@ namespace CBJ.Tests.EditMode.Gameplay
         }
 
         [Test]
+        public void Probe_WhilePlaying_ReportsTheStepWithoutMoving()
+        {
+            LevelSession session = Begin(OneStepLevel());
+            Block block = session.Board.Blocks[0];
+
+            StepResult result = session.Probe(block, Direction.Down);
+
+            Assert.That((result, block.IsExited), Is.EqualTo((StepResult.Exited, false)));
+        }
+
+        [Test]
+        public void Probe_WhilePaused_ReportsBlocked()
+        {
+            LevelSession session = Begin(OneStepLevel());
+            session.Pause();
+
+            StepResult result = session.Probe(session.Board.Blocks[0], Direction.Up);
+
+            Assert.That(result, Is.EqualTo(StepResult.Blocked));
+        }
+
+        [Test]
         public void TryStep_LastBlockExits_WinsAndStopsTheTimer()
         {
             LevelSession session = Begin(OneStepLevel());

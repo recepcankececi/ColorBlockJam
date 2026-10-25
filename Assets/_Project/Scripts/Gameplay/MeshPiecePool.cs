@@ -26,10 +26,16 @@ namespace CBJ.Gameplay
 
         public MeshRenderer Get(Transform parent, Vector3 localPosition, Quaternion localRotation)
         {
+            return Get(parent, localPosition, localRotation, Vector3.one);
+        }
+
+        public MeshRenderer Get(Transform parent, Vector3 localPosition, Quaternion localRotation, Vector3 localScale)
+        {
             MeshRenderer piece = _pool.Get();
             Transform pieceTransform = piece.transform;
             pieceTransform.SetParent(parent, false);
             pieceTransform.SetLocalPositionAndRotation(localPosition, localRotation);
+            pieceTransform.localScale = localScale;
             piece.gameObject.SetActive(true);
             return piece;
         }

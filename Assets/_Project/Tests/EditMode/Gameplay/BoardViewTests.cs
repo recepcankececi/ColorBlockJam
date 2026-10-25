@@ -83,6 +83,47 @@ namespace CBJ.Tests.EditMode.Gameplay
         }
 
         [Test]
+        public void Show_DoorOfThreeCells_DrawsOneFrameAndOneArrow()
+        {
+            _view.Show(WideDoorLevel().BuildBoard());
+
+            string[] pieces = _root.transform.Find("Doors").GetComponentsInChildren<MeshRenderer>().Select(r => r.name).ToArray();
+            Assert.That(pieces, Is.EquivalentTo(new[] { "DoorFrame", "DoorArrow" }));
+        }
+
+        [Test]
+        public void Show_DoorOfThreeCells_StretchesTheFrameAcrossIt()
+        {
+            _view.Show(WideDoorLevel().BuildBoard());
+
+            Transform frame = _root.GetComponentsInChildren<MeshRenderer>().First(r => r.name == "DoorFrame").transform;
+            Assert.That(frame.localScale.x, Is.EqualTo(3f));
+        }
+
+        [Test]
+        public void Lift_Block_CastsOneShadow()
+        {
+            BoardModel board = SampleLevel().BuildBoard();
+            _view.Show(board);
+
+            _view.Lift(board.Blocks[0]);
+
+            Assert.That(ActiveRenderersUnder("Blocks", "BlockShadow"), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Clear_WhileABlockIsLifted_PutsTheShadowAway()
+        {
+            BoardModel board = SampleLevel().BuildBoard();
+            _view.Show(board);
+            _view.Lift(board.Blocks[0]);
+
+            _view.Clear();
+
+            Assert.That(ActiveRenderersUnder("Blocks", "BlockShadow"), Is.Zero);
+        }
+
+        [Test]
         public void Show_Block_TintsEveryPieceWithThePaletteColour()
         {
             _view.Show(SampleLevel().BuildBoard());
@@ -188,12 +229,30 @@ namespace CBJ.Tests.EditMode.Gameplay
             return _root.transform.Find(group).GetComponentsInChildren<MeshRenderer>().Length;
         }
 
+        private int ActiveRenderersUnder(string group, string pieceName)
+        {
+            return _root.transform.Find(group).GetComponentsInChildren<MeshRenderer>().Count(r => r.name == pieceName);
+        }
+
         // The property block stores colours with a colour-space round trip, so compare within a tolerance.
         private static float TintDistance(Renderer renderer, Color expected)
         {
             var block = new MaterialPropertyBlock();
             renderer.GetPropertyBlock(block);
             return Vector4.Distance(block.GetColor(BaseColorId), expected);
+        }
+
+        // 4×2 board, a red L block, three one-cell blue doors side by side on the top edge (merged into one door).
+        private static LevelData WideDoorLevel()
+        {
+            var level = new LevelData(4, Height, 30);
+            for (int slot = 0; slot < 3; slot++)
+            {
+                level.AddDoor(new DoorData(Direction.Up, slot, 1, Blue));
+            }
+
+            level.AddBlock(new BlockData(TestShapes.L.Cells, Vector2Int.zero, Red));
+            return level;
         }
 
         // 3×2 board, a red L block, a blue door on one top slot.

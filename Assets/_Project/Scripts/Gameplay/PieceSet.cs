@@ -15,7 +15,14 @@ namespace CBJ.Gameplay
         public void Add(MeshPiecePool pool, Transform parent, Vector3 localPosition, Quaternion localRotation,
             MaterialPropertyBlock tint)
         {
-            MeshRenderer piece = pool.Get(parent, localPosition, localRotation);
+            Add(pool, parent, localPosition, localRotation, Vector3.one, tint);
+        }
+
+        /// <summary>Like the other overload, with the piece scaled by <paramref name="localScale"/>.</summary>
+        public void Add(MeshPiecePool pool, Transform parent, Vector3 localPosition, Quaternion localRotation,
+            Vector3 localScale, MaterialPropertyBlock tint)
+        {
+            MeshRenderer piece = pool.Get(parent, localPosition, localRotation, localScale);
             if (tint != null)
             {
                 piece.SetPropertyBlock(tint);
