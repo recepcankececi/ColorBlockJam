@@ -19,6 +19,12 @@ namespace CBJ.Data
         [Tooltip("Seconds a block takes to rise when grabbed (and to drop when released).")]
         [SerializeField, Min(0.01f)] private float _liftDuration = 0.08f;
 
+        [Tooltip("Fastest a held block follows the finger, in cells per second.")]
+        [SerializeField, Min(0.1f)] private float _dragMaxSpeed = 30f;
+
+        [Tooltip("Seconds a held block takes, roughly, to catch up with the finger; 0 follows at once.")]
+        [SerializeField, Min(0f)] private float _dragSmoothTime = 0.04f;
+
         [Tooltip("Seconds a released block takes to ease back onto its cell.")]
         [SerializeField, Min(0.01f)] private float _settleDuration = 0.12f;
 
@@ -26,6 +32,12 @@ namespace CBJ.Data
         [SerializeField, Range(0.5f, 1.5f)] private float _shadowSpread = 1.05f;
 
         [Header("Exit")]
+        [Tooltip("Cells a held block may sit off its door's line and still leave at once; further off it leaves on release.")]
+        [SerializeField, Range(0f, 0.5f)] private float _exitAlignTolerance = 0.08f;
+
+        [Tooltip("Cells an exiting block travels past the door plane before the door has swallowed it.")]
+        [SerializeField, Min(0f)] private float _exitTravelCells = 1.5f;
+
         [Tooltip("Seconds an exiting block takes to slide into its door and be swallowed by it.")]
         [SerializeField, Min(0.01f)] private float _exitDuration = 0.28f;
 
@@ -82,11 +94,23 @@ namespace CBJ.Data
         /// <summary>Seconds a block takes to rise when grabbed and to drop when released.</summary>
         public float LiftDuration => _liftDuration;
 
+        /// <summary>Fastest a held block follows the finger, in cells per second.</summary>
+        public float DragMaxSpeed => _dragMaxSpeed;
+
+        /// <summary>Approximate seconds a held block takes to catch up with the finger.</summary>
+        public float DragSmoothTime => _dragSmoothTime;
+
         /// <summary>Seconds a released block takes to ease back onto its cell.</summary>
         public float SettleDuration => _settleDuration;
 
         /// <summary>Size of the shadow under a held block relative to its footprint.</summary>
         public float ShadowSpread => _shadowSpread;
+
+        /// <summary>Cells a held block may sit off its door's line and still leave at once.</summary>
+        public float ExitAlignTolerance => _exitAlignTolerance;
+
+        /// <summary>Cells an exiting block travels past the door plane before it is swallowed.</summary>
+        public float ExitTravelCells => _exitTravelCells;
 
         /// <summary>Seconds an exiting block takes to slide into its door and be swallowed by it.</summary>
         public float ExitDuration => _exitDuration;

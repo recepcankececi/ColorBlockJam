@@ -67,7 +67,8 @@ Decisions and why:
   type is a model rule plus a view, and the editor and the game share the same data.
 - **Continuous drag over a cell model (ADR-002).** The model stays on whole cells and moves one cell per step with a
   collision check, so the rules are deterministic and fully testable. On top of it the held block moves freely in
-  two dimensions: each frame the finger's lead is applied along X, then Y, each clamped by the nearest obstacle
+  two dimensions: each frame it eases towards the finger under a speed cap, and that lead is applied along X, then
+  Y, each clamped by the nearest obstacle
   (the unit cells of the other blocks and the wall cells around the board; door cells are open only to blocks of
   their colour). The model origin is the rounded position, and the model steps whenever it changes. A box that
   overlaps no obstacle is at least half a cell clear of it on some axis, so the rounded footprint is always free
@@ -140,13 +141,16 @@ Implemented after the required scope was complete (ADR-008), with every rule in 
   door cell.
 - **Exit rule:** a block leaves through a door of its colour only if its side fits the door's width and every
   cell has a clear path to that edge (so concave shapes cannot clip through walls). The exit happens in one step.
-- **Auto-exit:** whenever a held block's rounded position touches an edge whose door lets it out, it leaves at
-  once (the last step's direction is tried first), so the player never has to push past the edge or line the block
-  up exactly with the door. A block resting next to its door leaves on the first move after it is grabbed.
+- **Auto-exit:** a held block leaves at once when its rounded position touches an edge whose door lets it out and it
+  sits within 0.08 cells of the door's line (the last step's direction is tried first); further off the line it
+  waits at the edge. Released, a block whose cell touches its door eases onto the cell (120 ms) and slides out in
+  the same motion, so the player never has to line the block up exactly. A block resting next to its door leaves on
+  the first move after it is grabbed. The exiting block travels 1.5 cells past the door before it is swallowed.
 - **Drag feel:** a grabbed block lifts slightly and casts a soft shadow (a rounded quad from the supplied
   `SquareRoundedMask`, sized to the block's bounding box, so L shapes get a rectangular shadow). It follows the
-  finger exactly wherever the board lets it go and slides along walls and blocks it is pushed against; the block
-  chases the finger's position (not each frame's movement), so it catches up after being stopped. Released, it
+  finger wherever the board lets it go and slides along walls and blocks it is pushed against; it chases the
+  finger's position with light easing (0.04 s) and a speed cap (30 cells/s), so after being stopped it catches up
+  over a few frames instead of jumping. Released, it
   eases back onto its model cell (120 ms) and drops.
 - **Exit animation:** the door swallows the block: it slides along the exit axis and shrinks only along that axis,
   pinned at the door plane (280 ms, ease-in), while its shadow follows and fades. The door sinks to the board

@@ -7,11 +7,11 @@ namespace CBJ.Gameplay
     /// <summary>
     /// Draws one <see cref="CBJ.Core.Block"/> as a single merged mesh. While held it lifts, casts a shadow and
     /// follows the drag offset on top of its model cell; released, it eases back onto the cell and drops. Exiting,
-    /// it slides towards its door and is swallowed: it shrinks only along the exit axis, pinned at the door plane,
-    /// while its shadow follows and fades. A destroyed block shrinks away where it stands. An ice block wears a
-    /// translucent shell, a slightly larger copy of its mesh, that shrinks away when the ice thaws. The view keeps its
-    /// mesh while pooled and refills it for the next block. Idle views are disabled, so only animating or held blocks
-    /// run an update.
+    /// it first finishes any settle, then slides through its door and is swallowed: it shrinks only along the exit
+    /// axis, pinned a set distance past the door plane, while its shadow follows and fades. A destroyed block shrinks
+    /// away where it stands. An ice block wears a translucent shell, a slightly larger copy of its mesh, that shrinks
+    /// away when the ice thaws. The view keeps its mesh while pooled and refills it for the next block. Idle views are
+    /// disabled, so only animating or held blocks run an update.
     /// </summary>
     public sealed class BlockView : MonoBehaviour
     {
@@ -33,6 +33,7 @@ namespace CBJ.Gameplay
         private float _lift;
         private bool _held;
         private bool _exiting;
+        private bool _exitPending;
         private bool _swallowed;
         private Vector3 _exitFrom;
         private float _exitLift;
@@ -100,6 +101,7 @@ namespace CBJ.Gameplay
             _lift = 0f;
             _held = false;
             _exiting = false;
+            _exitPending = false;
             Apply(_cell, 1f);
             enabled = false;
         }
@@ -149,14 +151,24 @@ namespace CBJ.Gameplay
             _dropped = null;
         }
 
-        // The block leaves along the local unit vector direction; doorPlane is the door's coordinate along it.
-        internal void Exit(Vector3 direction, float doorPlane, Action<BlockView> finished)
+        // The block leaves along the local unit vector direction; doorPlane is the door's coordinate along it. A view
+        // still settling after a release finishes the settle and slides out straight from it. Returns the seconds
+        // until the block is gone.
+        internal float Exit(Vector3 direction, float doorPlane, Action<BlockView> finished)
         {
-            BeginExit(finished);
             _swallowed = true;
             _exitVertical = direction.z != 0f;
             _exitSign = Mathf.Sign(_exitVertical ? direction.z : direction.x);
             _exitPlane = doorPlane;
+            if (!_held && _settle < 1f)
+            {
+                _exitPending = true;
+                _exitFinished = finished;
+                return (1f - _settle) * _config.SettleDuration + _config.ExitDuration;
+            }
+
+            BeginExit(finished);
+            return _config.ExitDuration;
         }
 
         internal void Vanish(Action<BlockView> finished)
@@ -176,6 +188,7 @@ namespace CBJ.Gameplay
             _dropped = null;
             _exitFinished = null;
             _exiting = false;
+            _exitPending = false;
             _swallowed = false;
             _held = false;
             transform.localScale = Vector3.one;
@@ -241,6 +254,13 @@ namespace CBJ.Gameplay
                 shadow.localScale = _shadowScale * easedLift;
             }
 
+            if (_exitPending && _settle >= 1f)
+            {
+                _exitPending = false;
+                BeginExit(_exitFinished);
+                return;
+            }
+
             if (!_held && !_thawing && _lift <= 0f && _settle >= 1f)
             {
                 enabled = false;
@@ -259,10 +279,10 @@ namespace CBJ.Gameplay
             enabled = true;
         }
 
-        // Along the exit axis the block spans [trailing, leading]. The trailing face slides to the door plane; the
-        // leading face slides with it until it meets the plane and stays there, so the door swallows the block
-        // instead of the block passing through it. Across the axis the lifted size eases back to rest around the
-        // footprint centre, and the lift settles to the floor.
+        // Along the exit axis the block spans [trailing, leading]. The trailing face slides to the swallow plane, a set
+        // distance past the door plane; the leading face slides with it until it meets that plane and stays there, so
+        // the block travels through the door and is swallowed. Across the axis the lifted size eases back to rest
+        // around the footprint centre, and the lift settles to the floor.
         private void ApplySwallow(float eased)
         {
             float liftScale = 1f + (_config.LiftScale - 1f) * _exitLift;
@@ -272,7 +292,8 @@ namespace CBJ.Gameplay
             float start = (_exitVertical ? _exitFrom.z + _pivot.z : _exitFrom.x + _pivot.x) - length * 0.5f;
             float trailing0 = _exitSign > 0f ? start : -(start + length);
             float leading0 = trailing0 + length;
-            float plane = Mathf.Max(_exitPlane, leading0);
+            float swallowPlane = _exitPlane + _config.ExitTravelCells * BoardLayout.CellSize;
+            float plane = Mathf.Max(swallowPlane, leading0);
             float travel = (plane - trailing0) * eased;
             float trailing = trailing0 + travel;
             float leading = Mathf.Min(leading0 + travel, plane);
@@ -295,7 +316,8 @@ namespace CBJ.Gameplay
 
             transform.localPosition = position;
             transform.localScale = scales;
-            if (_shadow != null)
+            // A block that settled onto the floor before exiting has no shadow left to show.
+            if (_shadow != null && _exitLift > 0f)
             {
                 FollowWithShadow(position, scales, scale, 1f - eased);
             }

@@ -22,7 +22,8 @@ namespace CBJ.Gameplay
         {
             _depth = depth;
             _speed = depth / sinkDuration;
-            _downLeft = downSeconds;
+            // Two blocks leaving close together: the door stays down for whichever is still going.
+            _downLeft = Mathf.Max(_downLeft, downSeconds);
             enabled = true;
         }
 

@@ -17,6 +17,12 @@ namespace CBJ.Tests.EditMode.Gameplay
         private const int WalkSeed = 20261025;
         private const int WalkFrames = 2000;
         private const int GrabEveryFrames = 50;
+        private const float Frame = 1f / 60f;
+        private const float MaxSpeed = 30f;
+        private const float SmoothTime = 0.04f;
+        private const float AlignTolerance = 0.08f;
+        private const int SmoothFrames = 120;
+        private const float SmoothArrival = 1e-3f;
 
         // Grabbing every block at the centre of its origin cell keeps the lead equal to the finger's travel.
         private static readonly Vector2 CellCentre = new Vector2(0.5f, 0.5f);
@@ -26,7 +32,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BlockDrag drag = GrabFirst(Board4x3(new Vector2Int(1, 1)), out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(0.3f, 0.2f));
+            drag.Drag(grab + new Vector2(0.3f, 0.2f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(1, 1), new Vector2(1.3f, 1.2f));
         }
@@ -36,7 +42,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BlockDrag drag = GrabFirst(Board4x3(new Vector2Int(1, 1)), out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(0.45f, 0f));
+            drag.Drag(grab + new Vector2(0.45f, 0f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(1, 1), new Vector2(1.45f, 1f));
         }
@@ -46,7 +52,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BlockDrag drag = GrabFirst(Board4x3(new Vector2Int(1, 1)), out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(0.6f, 0f));
+            drag.Drag(grab + new Vector2(0.6f, 0f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(2, 1), new Vector2(1.6f, 1f));
         }
@@ -56,7 +62,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BlockDrag drag = GrabFirst(Board4x3(new Vector2Int(1, 0)), out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(0.7f, 0.8f));
+            drag.Drag(grab + new Vector2(0.7f, 0.8f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(2, 1), new Vector2(1.7f, 0.8f));
         }
@@ -65,9 +71,9 @@ namespace CBJ.Tests.EditMode.Gameplay
         public void Drag_LeadBackUnderHalfACell_CommitsTheCellBack()
         {
             BlockDrag drag = GrabFirst(Board4x3(new Vector2Int(1, 1)), out Block block, out Vector2 grab);
-            drag.Drag(grab + new Vector2(0.6f, 0f));
+            drag.Drag(grab + new Vector2(0.6f, 0f), Frame);
 
-            drag.Drag(grab + new Vector2(0.4f, 0f));
+            drag.Drag(grab + new Vector2(0.4f, 0f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(1, 1), new Vector2(1.4f, 1f));
         }
@@ -77,7 +83,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BlockDrag drag = GrabFirst(Board4x3(new Vector2Int(0, 1), new Vector2Int(2, 1)), out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(1.7f, 0f));
+            drag.Drag(grab + new Vector2(1.7f, 0f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(1, 1), new Vector2(1f, 1f));
         }
@@ -87,7 +93,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BlockDrag drag = GrabFirst(Board4x3(new Vector2Int(1, 0), new Vector2Int(1, 2)), out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(0f, 1.6f));
+            drag.Drag(grab + new Vector2(0f, 1.6f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(1, 1), new Vector2(1f, 1f));
         }
@@ -97,7 +103,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BlockDrag drag = GrabFirst(Board4x3(new Vector2Int(1, 1)), out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(5f, 0f));
+            drag.Drag(grab + new Vector2(5f, 0f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(3, 1), new Vector2(3f, 1f));
         }
@@ -107,7 +113,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BlockDrag drag = GrabFirst(Board4x3(new Vector2Int(0, 1), new Vector2Int(3, 1)), out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(6f, 0f));
+            drag.Drag(grab + new Vector2(6f, 0f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(2, 1), new Vector2(2f, 1f));
         }
@@ -117,7 +123,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BlockDrag drag = GrabFirst(Board4x3(new Vector2Int(1, 0)), out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(0.8f, -0.5f));
+            drag.Drag(grab + new Vector2(0.8f, -0.5f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(2, 0), new Vector2(1.8f, 0f));
         }
@@ -128,7 +134,7 @@ namespace CBJ.Tests.EditMode.Gameplay
             BlockDrag drag = GrabFirst(Board4x3(new Vector2Int(0, 0), new Vector2Int(0, 1), new Vector2Int(1, 1)),
                 out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(1.4f, 0.6f));
+            drag.Drag(grab + new Vector2(1.4f, 0.6f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(1, 0), new Vector2(1.4f, 0f));
         }
@@ -138,7 +144,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BlockDrag drag = GrabFirst(Board4x3(new Vector2Int(0, 0), new Vector2Int(1, 0)), out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(0.8f, 0.3f));
+            drag.Drag(grab + new Vector2(0.8f, 0.3f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(0, 0), new Vector2(0f, 0.3f));
         }
@@ -150,7 +156,7 @@ namespace CBJ.Tests.EditMode.Gameplay
             BlockDrag drag = GrabFirst(Board4x3(new Vector2Int(0, 1), new Vector2Int(1, 0), new Vector2Int(1, 2)),
                 out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(2f, 0f));
+            drag.Drag(grab + new Vector2(2f, 0f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(2, 1), new Vector2(2f, 1f));
         }
@@ -160,9 +166,9 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BlockDrag drag = GrabFirst(Board4x3(new Vector2Int(0, 1), new Vector2Int(1, 0), new Vector2Int(1, 2)),
                 out Block block, out Vector2 grab);
-            drag.Drag(grab + new Vector2(0f, 0.2f));
+            drag.Drag(grab + new Vector2(0f, 0.2f), Frame);
 
-            drag.Drag(grab + new Vector2(2f, 0.2f));
+            drag.Drag(grab + new Vector2(2f, 0.2f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(0, 1), new Vector2(0f, 1.2f));
         }
@@ -175,7 +181,7 @@ namespace CBJ.Tests.EditMode.Gameplay
             level.AddBlock(new BlockData(TestShapes.Domino.Cells, new Vector2Int(1, 0), Red));
             BlockDrag drag = GrabFirst(level, out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(0f, -0.4f));
+            drag.Drag(grab + new Vector2(0f, -0.4f), Frame);
 
             Assert.That(block.IsExited, Is.False);
             AssertDrag(drag, block, new Vector2Int(1, 0), new Vector2(1f, 0f));
@@ -190,7 +196,7 @@ namespace CBJ.Tests.EditMode.Gameplay
             level.AddBlock(new BlockData(TestShapes.L.Cells, new Vector2Int(1, 1), Red));
             BlockDrag drag = GrabFirst(level, out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(1.8f, 0f));
+            drag.Drag(grab + new Vector2(1.8f, 0f), Frame);
 
             Assert.That(block.IsExited, Is.False);
             AssertDrag(drag, block, new Vector2Int(2, 1), new Vector2(2f, 1f));
@@ -201,7 +207,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BlockDrag drag = GrabFirst(DoorLevel(Direction.Down, 1, Blue, new Vector2Int(1, 0)), out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(0f, -0.4f));
+            drag.Drag(grab + new Vector2(0f, -0.4f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(1, 0), new Vector2(1f, 0f));
         }
@@ -211,7 +217,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BlockDrag drag = GrabFirst(DoorLevel(Direction.Right, 1, Red, new Vector2Int(1, 1)), out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(0.6f, 0f));
+            drag.Drag(grab + new Vector2(0.6f, 0f), Frame);
 
             Assert.That((block.IsExited, drag.Held), Is.EqualTo((true, (Block)null)));
         }
@@ -221,19 +227,139 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BlockDrag drag = GrabFirst(DoorLevel(Direction.Right, 1, Blue, new Vector2Int(1, 1)), out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(0.6f, 0f));
+            drag.Drag(grab + new Vector2(0.6f, 0f), Frame);
 
             Assert.That((block.IsExited, drag.Held), Is.EqualTo((false, block)));
         }
 
         [Test]
-        public void Drag_StepAlongAnEdgeToItsDoor_ExitsThroughThatEdge()
+        public void Drag_StepAlongAnEdgeToItsDoorOffItsLine_KeepsHoldingTheBlock()
         {
             BlockDrag drag = GrabFirst(DoorLevel(Direction.Down, 2, Red, new Vector2Int(1, 0)), out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(0.6f, 0f));
+            drag.Drag(grab + new Vector2(0.6f, 0f), Frame);
+
+            Assert.That((block.IsExited, drag.Held), Is.EqualTo((false, block)));
+        }
+
+        [Test]
+        public void Drag_StepAlongAnEdgeToItsDoorWithinTheTolerance_ExitsThroughThatEdge()
+        {
+            BlockDrag drag = GrabFirst(DoorLevel(Direction.Down, 2, Red, new Vector2Int(1, 0)), out Block block, out Vector2 grab);
+
+            drag.Drag(grab + new Vector2(1f + AlignTolerance * 0.5f, 0f), Frame);
 
             Assert.That(block.IsExited, Is.True);
+        }
+
+        [Test]
+        public void Drag_SmoothedOffTheLineOfAWideDoorAndPulledOut_RestsFlushAtTheEdge()
+        {
+            var level = new LevelData(3, 3, 30);
+            level.AddDoor(new DoorData(Direction.Down, 1, 2, Red));
+            level.AddBlock(new BlockData(TestShapes.Single.Cells, new Vector2Int(1, 0), Red));
+            LevelSession session = Begin(level);
+            Block block = session.Board.Blocks[0];
+            Vector2 grab = block.Origin + CellCentre;
+            var drag = new BlockDrag(session, MaxSpeed, SmoothTime, AlignTolerance);
+            drag.Grab(block, grab);
+            for (int frame = 0; frame < SmoothFrames; frame++)
+            {
+                drag.Drag(grab + new Vector2(0.4f, 0f), Frame);
+            }
+
+            for (int frame = 0; frame < SmoothFrames; frame++)
+            {
+                drag.Drag(grab + new Vector2(0.4f, -2f), Frame);
+                Assert.That(drag.Position.y, Is.GreaterThan(-Tolerance), $"Frame {frame}: y was {drag.Position.y}.");
+            }
+
+            Assert.That((block.IsExited, block.Origin), Is.EqualTo((false, new Vector2Int(1, 0))));
+        }
+
+        [Test]
+        public void LetGo_OnTheEdgeOfItsDoorOffItsLine_ExitsThroughThatEdge()
+        {
+            BlockDrag drag = GrabFirst(DoorLevel(Direction.Down, 2, Red, new Vector2Int(1, 0)), out Block block, out Vector2 grab);
+            drag.Drag(grab + new Vector2(0.6f, 0f), Frame);
+
+            bool exited = drag.LetGo();
+
+            Assert.That((exited, block.IsExited, drag.Held), Is.EqualTo((true, true, (Block)null)));
+        }
+
+        [Test]
+        public void LetGo_AwayFromItsDoor_KeepsTheBlockOnItsCell()
+        {
+            BlockDrag drag = GrabFirst(DoorLevel(Direction.Right, 1, Red, new Vector2Int(0, 1)), out Block block, out Vector2 grab);
+            drag.Drag(grab + new Vector2(0.6f, 0f), Frame);
+
+            bool exited = drag.LetGo();
+
+            Assert.That((exited, block.IsExited, block.Origin, drag.Held),
+                Is.EqualTo((false, false, new Vector2Int(1, 1), (Block)null)));
+        }
+
+        [Test]
+        public void LetGo_WhilePausedOnTheEdgeOfItsDoor_KeepsTheBlock()
+        {
+            LevelSession session = Begin(DoorLevel(Direction.Down, 2, Red, new Vector2Int(1, 0)));
+            BlockDrag drag = GrabFirst(session, out Block block, out Vector2 grab);
+            drag.Drag(grab + new Vector2(0.6f, 0f), Frame);
+            session.Pause();
+
+            bool exited = drag.LetGo();
+
+            Assert.That((exited, block.IsExited), Is.EqualTo((false, false)));
+        }
+
+        [Test]
+        public void Drag_SmoothedFingerFarAway_MovesNoFurtherThanTheSpeedCapInOneFrame()
+        {
+            LevelSession session = Begin(Board4x3(new Vector2Int(0, 1)));
+            Block block = session.Board.Blocks[0];
+            Vector2 grab = block.Origin + CellCentre;
+            var drag = new BlockDrag(session, MaxSpeed, SmoothTime, AlignTolerance);
+            drag.Grab(block, grab);
+
+            drag.Drag(grab + new Vector2(3f, 0f), Frame);
+
+            Assert.That(drag.Position.x, Is.InRange(Tolerance, MaxSpeed * Frame + Tolerance));
+        }
+
+        [Test]
+        public void Drag_SmoothedBlockFreedFromAnObstacle_ReachesTheFingerOverSeveralFrames()
+        {
+            // The finger waits up and to the right; the block beside it holds the held block back on X until the held
+            // block has risen clear of it.
+            LevelSession session = Begin(Board4x3(new Vector2Int(0, 0), new Vector2Int(1, 0)));
+            Block block = session.Board.Blocks[0];
+            Vector2 grab = block.Origin + CellCentre;
+            var drag = new BlockDrag(session, MaxSpeed, SmoothTime, AlignTolerance);
+            drag.Grab(block, grab);
+            Vector2 finger = grab + new Vector2(3f, 1f);
+            var goal = new Vector2(3f, 1f);
+            int freedFrame = -1;
+            int reachedFrame = -1;
+            for (int frame = 0; frame < SmoothFrames && reachedFrame < 0; frame++)
+            {
+                Vector2 before = drag.Position;
+                drag.Drag(finger, Frame);
+                Assert.That(Vector2.Distance(before, drag.Position), Is.LessThanOrEqualTo(MaxSpeed * Frame + Tolerance),
+                    $"Frame {frame}.");
+                if (freedFrame < 0 && drag.Position.x > 0f)
+                {
+                    freedFrame = frame;
+                }
+
+                if (Vector2.Distance(drag.Position, goal) < SmoothArrival)
+                {
+                    reachedFrame = frame;
+                }
+            }
+
+            Assert.That(freedFrame, Is.GreaterThan(0), "The obstacle never held the block back.");
+            Assert.That(reachedFrame - freedFrame, Is.GreaterThan(1), $"Freed at {freedFrame}, reached at {reachedFrame}.");
         }
 
         [Test]
@@ -241,7 +367,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BlockDrag drag = GrabFirst(DoorLevel(Direction.Right, 1, Red, new Vector2Int(2, 1)), out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(0.1f, 0f));
+            drag.Drag(grab + new Vector2(0.1f, 0f), Frame);
 
             Assert.That(block.IsExited, Is.True);
         }
@@ -253,7 +379,7 @@ namespace CBJ.Tests.EditMode.Gameplay
             level.AddBlock(new BlockData(TestShapes.Single.Cells, new Vector2Int(1, 1), Red, BlockTraits.Arrow(Axis.Horizontal)));
             BlockDrag drag = GrabFirst(level, out Block block, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(0.3f, 0.4f));
+            drag.Drag(grab + new Vector2(0.3f, 0.4f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(1, 1), new Vector2(1.3f, 1f));
         }
@@ -265,7 +391,7 @@ namespace CBJ.Tests.EditMode.Gameplay
             BlockDrag drag = GrabFirst(session, out Block block, out Vector2 grab);
             session.Pause();
 
-            drag.Drag(grab + new Vector2(0.6f, 0.3f));
+            drag.Drag(grab + new Vector2(0.6f, 0.3f), Frame);
 
             AssertDrag(drag, block, new Vector2Int(1, 1), new Vector2(1f, 1f));
         }
@@ -275,7 +401,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BlockDrag drag = GrabFirst(Board4x3(new Vector2Int(1, 1)), out _, out Vector2 grab);
 
-            drag.Drag(grab + new Vector2(0.7f, -0.2f));
+            drag.Drag(grab + new Vector2(0.7f, -0.2f), Frame);
 
             Assert.That(Vector2.Distance(drag.Offset, new Vector2(-0.3f, -0.2f)), Is.LessThan(Tolerance));
         }
@@ -284,7 +410,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         public void Release_WhileHolding_ClearsTheHeldBlockAndOffset()
         {
             BlockDrag drag = GrabFirst(Board4x3(new Vector2Int(1, 1)), out _, out Vector2 grab);
-            drag.Drag(grab + new Vector2(0.3f, 0f));
+            drag.Drag(grab + new Vector2(0.3f, 0f), Frame);
 
             drag.Release();
 
@@ -323,7 +449,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             LevelSession session = Begin(WalkLevel());
             BoardModel board = session.Board;
-            var drag = new BlockDrag(session);
+            var drag = Instant(session);
             var random = new System.Random(WalkSeed);
             for (int frame = 0; frame < WalkFrames; frame++)
             {
@@ -337,7 +463,7 @@ namespace CBJ.Tests.EditMode.Gameplay
                 // Mostly small finger moves, now and then a jump across the board.
                 float reach = random.Next(10) == 0 ? board.Width : 0.4f;
                 var lead = new Vector2((float)(random.NextDouble() * 2.0 - 1.0), (float)(random.NextDouble() * 2.0 - 1.0)) * reach;
-                drag.Drag(drag.Position + CellCentre + lead);
+                drag.Drag(drag.Position + CellCentre + lead, Frame);
 
                 Block held = drag.Held;
                 Assert.That(OverlapsAnotherBlock(board, held, drag.Position), Is.False, $"Frame {frame}: overlap at {drag.Position}.");
@@ -378,8 +504,8 @@ namespace CBJ.Tests.EditMode.Gameplay
             Vector2 back = grab + new Vector2(-0.6f, -0.2f);
             TestDelegate drags = () =>
             {
-                drag.Drag(forth);
-                drag.Drag(back);
+                drag.Drag(forth, Frame);
+                drag.Drag(back, Frame);
             };
             drags();
 
@@ -395,9 +521,15 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             block = session.Board.Blocks[0];
             grab = block.Origin + CellCentre;
-            var drag = new BlockDrag(session);
+            var drag = Instant(session);
             drag.Grab(block, grab);
             return drag;
+        }
+
+        // Follows the finger at once, so one frame's drag lands where the finger is.
+        private static BlockDrag Instant(LevelSession session)
+        {
+            return new BlockDrag(session, float.PositiveInfinity, 0f, AlignTolerance);
         }
 
         private static void AssertDrag(BlockDrag drag, Block block, Vector2Int origin, Vector2 position)

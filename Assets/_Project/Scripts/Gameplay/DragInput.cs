@@ -1,5 +1,6 @@
 using System;
 using CBJ.Core;
+using CBJ.Data;
 using UnityEngine;
 
 namespace CBJ.Gameplay
@@ -7,25 +8,27 @@ namespace CBJ.Gameplay
     /// <summary>
     /// Drags blocks with one pointer: the block under the press is lifted and its view follows the finger freely in
     /// two dimensions, stopped by walls and other blocks; <see cref="BlockDrag"/> steps the model whenever the rounded
-    /// position changes (ADR-002) and lets a block that reaches its door leave on its own. Releasing settles the view
-    /// back onto its model cell. After
+    /// position changes (ADR-002) and lets a block that reaches its door in line with it leave on its own. Releasing
+    /// settles the view back onto its model cell; a block whose cell touches its door then slides out. After
     /// <see cref="PickNext"/>, the next press picks a block instead of dragging it (the hammer booster).
     /// </summary>
     public sealed class DragInput : MonoBehaviour
     {
         private IPointerSource _pointer;
         private Camera _camera;
+        private GameConfig _config;
         private LevelSession _session;
         private BoardView _board;
         private BlockDrag _drag;
         private Action<Block> _pick;
         private bool _wasPressed;
 
-        /// <summary>Sets the input source and camera; call once before <see cref="Bind"/>.</summary>
-        public void Initialize(IPointerSource pointer, Camera boardCamera)
+        /// <summary>Sets the input source, camera and drag tunables; call once before <see cref="Bind"/>.</summary>
+        public void Initialize(IPointerSource pointer, Camera boardCamera, GameConfig config)
         {
             _pointer = pointer;
             _camera = boardCamera;
+            _config = config;
         }
 
         /// <summary>Drags blocks of the session's current board as shown by <paramref name="board"/>.</summary>
@@ -33,7 +36,7 @@ namespace CBJ.Gameplay
         {
             _session = session;
             _board = board;
-            _drag = new BlockDrag(session);
+            _drag = new BlockDrag(session, _config.DragMaxSpeed, _config.DragSmoothTime, _config.ExitAlignTolerance);
             _wasPressed = false;
         }
 
@@ -117,7 +120,7 @@ namespace CBJ.Gameplay
         private void Follow(Vector2 point)
         {
             Block block = _drag.Held;
-            _drag.Drag(point);
+            _drag.Drag(point, Time.deltaTime);
             if (_drag.Held != null)
             {
                 _board.Hold(block, _drag.Offset);
@@ -131,12 +134,14 @@ namespace CBJ.Gameplay
             picked(block);
         }
 
+        // The view starts settling first, so an exit the let-go triggers waits for the settle and follows it.
+        // While the attempt is not playing the session refuses the exit and the block just settles.
         private void Drop()
         {
             if (_drag != null && _drag.Held != null)
             {
                 _board.Drop(_drag.Held);
-                _drag.Release();
+                _drag.LetGo();
             }
         }
     }

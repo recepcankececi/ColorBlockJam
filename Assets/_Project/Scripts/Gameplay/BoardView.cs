@@ -295,14 +295,15 @@ namespace CBJ.Gameplay
         }
 
         // The block keeps its shadow while the door swallows it; the shadow goes back to the pool when the exit ends.
+        // The door sinks at once and stays down until the block is gone, a settle before the exit included.
         private void OnBlockExited(Block block, Door door)
         {
             BlockView view = _viewsByBlock[block];
             _viewsByBlock.Remove(block);
             Vector2Int step = door.Edge.ToOffset();
             float doorPlane = door.Edge.IsVertical() ? Layout.HalfDepth : Layout.HalfWidth;
-            view.Exit(new Vector3(step.x, 0f, step.y), doorPlane, _onExitFinished);
-            _viewsByDoor[door].Open(_doorDepth, _config.DoorSinkDuration, _config.ExitDuration);
+            float seconds = view.Exit(new Vector3(step.x, 0f, step.y), doorPlane, _onExitFinished);
+            _viewsByDoor[door].Open(_doorDepth, _config.DoorSinkDuration, seconds);
         }
 
         // A destroyed block shrinks away where it stands.

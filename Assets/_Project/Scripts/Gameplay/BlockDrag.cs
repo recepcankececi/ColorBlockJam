@@ -7,17 +7,21 @@ namespace CBJ.Gameplay
 {
     /// <summary>
     /// The drag of one held block, in plain C# so it runs in EditMode tests. The block moves freely in two dimensions:
-    /// each frame the finger's lead is applied along X, then along Y, each clamped by the nearest obstacle (the unit
-    /// cells of every other block, and the wall cells around the board except those of a door of the block's colour
-    /// whose span covers the block's side where it stands).
+    /// each frame it eases towards the finger, no faster than the speed cap, and that lead is applied along X, then
+    /// along Y, each clamped by the nearest obstacle (the unit cells of every other block, and the wall cells around
+    /// the board except those of a door of the block's colour whose span covers the block's side where it stands).
+    /// Easing from the block's own position means a block freed from an obstacle catches up over several frames.
     /// The model origin is the rounded position: whenever it changes the model steps there cell by cell (ADR-002).
-    /// Because the block never overlaps an obstacle, every cell its rounded footprint covers is free. A block whose
-    /// rounded position touches an edge it can leave through leaves at once (auto-exit).
+    /// Because the block never overlaps an obstacle, every cell its rounded footprint covers is free. A held block
+    /// whose rounded position touches an edge it can leave through leaves at once only while it is in line with the
+    /// door; otherwise it leaves when let go (<see cref="LetGo"/>).
     /// </summary>
     public sealed class BlockDrag
     {
         // Boxes closer than this count as touching, not overlapping, so float noise never wedges a block.
         private const float Contact = 1e-4f;
+        private const float MinLead = 1e-5f;
+        private const float HalfCell = 0.5f;
         private const int InitialObstacleCapacity = 256;
         private const int Edges = 4;
 
@@ -32,13 +36,30 @@ namespace CBJ.Gameplay
         // Per edge, indexed by Direction: the slots [start, end) of the door the block fits through right now.
         private readonly int[] _openStart = new int[Edges];
         private readonly int[] _openEnd = new int[Edges];
+        private readonly float _maxSpeed;
+        private readonly float _smoothTime;
+        private readonly float _alignTolerance;
         private Vector2 _grabOffset;
+        private Vector2 _velocity;
         private Direction _lastDirection;
 
-        /// <summary>Creates a drag on <paramref name="session"/>.</summary>
-        public BlockDrag(LevelSession session)
+        /// <summary>
+        /// Creates a drag on <paramref name="session"/>. The block follows the finger at most
+        /// <paramref name="maxSpeed"/> cells per second, easing in over about <paramref name="smoothTime"/> seconds
+        /// (0 follows at once), and leaves while held only within <paramref name="alignTolerance"/> cells of its
+        /// door's line.
+        /// </summary>
+        public BlockDrag(LevelSession session, float maxSpeed, float smoothTime, float alignTolerance)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
+            if (maxSpeed <= 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(maxSpeed));
+            }
+
+            _maxSpeed = maxSpeed;
+            _smoothTime = Mathf.Max(0f, smoothTime);
+            _alignTolerance = Mathf.Max(0f, alignTolerance);
         }
 
         /// <summary>The block being dragged; null when nothing is held or the held block has left the board.</summary>
@@ -59,15 +80,34 @@ namespace CBJ.Gameplay
             Held = block ?? throw new ArgumentNullException(nameof(block));
             Position = block.Origin;
             _grabOffset = point - block.Origin;
+            _velocity = Vector2.zero;
             _lastDirection = Direction.Right;
             CollectObstacles();
         }
 
-        /// <summary>Lets go of the held block.</summary>
+        /// <summary>
+        /// Lets go of the held block. If its model cell touches an edge it can leave through, it leaves now and the
+        /// result is true; its view settles onto that cell before sliding out.
+        /// </summary>
+        public bool LetGo()
+        {
+            if (Held == null)
+            {
+                return false;
+            }
+
+            bool exited = FindExit(_session, Held, _lastDirection, out Direction exit) &&
+                _session.TryStep(Held, exit) == StepResult.Exited;
+            Release();
+            return exited;
+        }
+
+        /// <summary>Lets go of the held block without trying to leave.</summary>
         public void Release()
         {
             Held = null;
             Position = Vector2.zero;
+            _velocity = Vector2.zero;
             _obstacles.Clear();
             _walls.Clear();
             _wallEdges.Clear();
@@ -75,32 +115,56 @@ namespace CBJ.Gameplay
         }
 
         /// <summary>
-        /// Moves the held block towards the finger at the cell-space <paramref name="point"/>, along X then Y, as far
-        /// as obstacles allow, stepping the model whenever the rounded position changes. Releases the block when it
-        /// leaves the board. Nothing moves while the attempt is not playing, an ice block never moves and an arrow
-        /// block moves only along its axis.
+        /// Moves the held block, over <paramref name="deltaTime"/> seconds, towards the finger at the cell-space
+        /// <paramref name="point"/>: eased and speed-capped, then along X and Y as far as obstacles allow, stepping the
+        /// model whenever the rounded position changes. Releases the block when it leaves the board. Nothing moves
+        /// while the attempt is not playing, an ice block never moves and an arrow block moves only along its axis.
         /// </summary>
-        public void Drag(Vector2 point)
+        public void Drag(Vector2 point, float deltaTime)
         {
-            if (Held == null || _session.State != LevelState.Playing || Held.IceLayers > 0)
+            if (Held == null || _session.State != LevelState.Playing || Held.IceLayers > 0 || deltaTime <= 0f)
             {
                 return;
             }
 
-            Vector2 lead = point - _grabOffset - Position;
-            bool arrow = Held.Kind == BlockKind.Arrow;
-            if ((!arrow || Held.ArrowAxis == Axis.Horizontal) && lead.x != 0f)
+            Vector2 goal = point - _grabOffset;
+            if (Held.Kind == BlockKind.Arrow)
             {
-                Position += new Vector2(SweepX(lead.x), 0f);
+                // Pin the locked axis so the easing never builds speed along it.
+                goal = Held.ArrowAxis == Axis.Horizontal ? new Vector2(goal.x, Position.y) : new Vector2(Position.x, goal.y);
+            }
+
+            // Easing only approaches the finger; a lead this small is a finger at rest, so nothing is swept or probed.
+            Vector2 lead = Follow(goal, deltaTime);
+            if (lead.sqrMagnitude < MinLead * MinLead)
+            {
+                return;
+            }
+
+            if (lead.x != 0f)
+            {
+                float moved = SweepX(lead.x);
+                Position += new Vector2(moved, 0f);
+                if (moved != lead.x)
+                {
+                    StopAxis(false);
+                }
+
                 if (Commit(false))
                 {
                     return;
                 }
             }
 
-            if ((!arrow || Held.ArrowAxis == Axis.Vertical) && lead.y != 0f)
+            if (lead.y != 0f)
             {
-                Position += new Vector2(0f, SweepY(lead.y));
+                float moved = SweepY(lead.y);
+                Position += new Vector2(0f, moved);
+                if (moved != lead.y)
+                {
+                    StopAxis(true);
+                }
+
                 if (Commit(true))
                 {
                     return;
@@ -139,6 +203,20 @@ namespace CBJ.Gameplay
             return false;
         }
 
+        // The lead towards goal this frame. Easing starts from the block's own position and an axis an obstacle stopped
+        // loses its velocity, so a block freed from an obstacle accelerates again instead of jumping to the finger.
+        private Vector2 Follow(Vector2 goal, float deltaTime)
+        {
+            if (_smoothTime <= 0f)
+            {
+                return Vector2.ClampMagnitude(goal - Position, _maxSpeed * deltaTime);
+            }
+
+            Vector2 eased = Vector2.SmoothDamp(Position, goal, ref _velocity, _smoothTime, float.PositiveInfinity, deltaTime);
+            _velocity = Vector2.ClampMagnitude(_velocity, _maxSpeed);
+            return Vector2.ClampMagnitude(eased - Position, _maxSpeed * deltaTime);
+        }
+
         // Steps the model towards the rounded position along one axis. True when the block left the board.
         private bool Commit(bool vertical)
         {
@@ -155,6 +233,17 @@ namespace CBJ.Gameplay
                     ? (target > origin ? Direction.Up : Direction.Down)
                     : (target > origin ? Direction.Right : Direction.Left);
                 _lastDirection = direction;
+                if (!IsAligned(direction) && _session.Probe(Held, direction) == StepResult.Exited)
+                {
+                    // Off the door's line the block waits just short of the next cell; it leaves once in line, or
+                    // when let go. Stopping where it is, not snapping back, keeps a held block from shaking.
+                    float sign = target > origin ? 1f : -1f;
+                    float wait = origin + sign * (HalfCell - Contact);
+                    Position = vertical ? new Vector2(Position.x, wait) : new Vector2(wait, Position.y);
+                    StopAxis(vertical);
+                    return false;
+                }
+
                 StepResult result = _session.TryStep(Held, direction);
                 if (result == StepResult.Exited)
                 {
@@ -166,6 +255,7 @@ namespace CBJ.Gameplay
                 {
                     // Cannot happen while the sweep keeps the block clear of obstacles; keep the model authoritative.
                     Position = vertical ? new Vector2(Position.x, origin) : new Vector2(origin, Position.y);
+                    StopAxis(vertical);
                     return false;
                 }
 
@@ -177,10 +267,22 @@ namespace CBJ.Gameplay
             }
         }
 
+        private void StopAxis(bool vertical)
+        {
+            _velocity = vertical ? new Vector2(_velocity.x, 0f) : new Vector2(0f, _velocity.y);
+        }
+
         private bool TryAutoExit()
         {
-            return FindExit(_session, Held, _lastDirection, out Direction exit) &&
+            return FindExit(_session, Held, _lastDirection, out Direction exit) && IsAligned(exit) &&
                 _session.TryStep(Held, exit) == StepResult.Exited;
+        }
+
+        // Whether the held block sits on its model cell across the exit axis, within the tolerance.
+        private bool IsAligned(Direction exit)
+        {
+            float across = exit.IsVertical() ? Position.x - Held.Origin.x : Position.y - Held.Origin.y;
+            return Mathf.Abs(across) <= _alignTolerance;
         }
 
         // Signed distance along X the block can travel towards dx before touching an obstacle.
@@ -269,7 +371,8 @@ namespace CBJ.Gameplay
         }
 
         // A door opens its wall cells only while its span covers the block's side, measured where the block stands;
-        // a shape whose arm would fit a narrower door stays outside, like the exit rule in MoveResolver.
+        // a shape whose arm would fit a narrower door stays outside, like the exit rule in MoveResolver. It also opens
+        // only to a block in line with it (or already reaching into it), so an off-line block rests flush at the edge.
         private void UpdateOpenDoors()
         {
             for (int edge = 0; edge < Edges; edge++)
@@ -290,11 +393,29 @@ namespace CBJ.Gameplay
                 bool vertical = door.Edge.IsVertical();
                 float start = vertical ? Position.x : Position.y;
                 float end = start + (vertical ? Held.Shape.Width : Held.Shape.Height);
-                if (door.Offset <= start + Contact && end - Contact <= door.Offset + door.Length)
+                if (door.Offset <= start + Contact && end - Contact <= door.Offset + door.Length &&
+                    (IsAligned(door.Edge) || ReachesPast(door.Edge)))
                 {
                     _openStart[(int)door.Edge] = door.Offset;
                     _openEnd[(int)door.Edge] = door.Offset + door.Length;
                 }
+            }
+        }
+
+        // Whether the held block's footprint already reaches past the board edge, into that edge's wall row.
+        private bool ReachesPast(Direction edge)
+        {
+            BoardModel board = _session.Board;
+            switch (edge)
+            {
+                case Direction.Down:
+                    return Position.y < -Contact;
+                case Direction.Up:
+                    return Position.y + Held.Shape.Height > board.Height + Contact;
+                case Direction.Left:
+                    return Position.x < -Contact;
+                default:
+                    return Position.x + Held.Shape.Width > board.Width + Contact;
             }
         }
 

@@ -15,8 +15,12 @@ MonoBehaviour:
   _liftHeight: 0.4
   _liftScale: 1.03
   _liftDuration: 0.08
+  _dragMaxSpeed: 30
+  _dragSmoothTime: 0.04
   _settleDuration: 0.12
   _shadowSpread: 1.05
+  _exitAlignTolerance: 0.08
+  _exitTravelCells: 1.5
   _exitDuration: 0.28
   _doorSinkDuration: 0.15
   _iceScale: 1.03
