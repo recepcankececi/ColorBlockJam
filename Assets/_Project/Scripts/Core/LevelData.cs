@@ -54,7 +54,8 @@ namespace CBJ.Core
         /// <summary>
         /// Builds a new board with new blocks for one attempt. Contiguous doors of one colour on one edge become a
         /// single door, so a block as wide as their combined span can exit. Throws when the data does not describe a
-        /// legal board (unknown shape, block outside the board or overlapping, door past its edge).
+        /// legal board (block without cells, block outside the board or overlapping, door past its edge);
+        /// <see cref="LevelValidator"/> reports those cases without throwing.
         /// </summary>
         public BoardModel BuildBoard()
         {
@@ -68,7 +69,7 @@ namespace CBJ.Core
         }
 
         // The editor places doors one slot at a time; adjacent same-colour slots read as one opening on screen.
-        private Door[] MergeDoors()
+        internal Door[] MergeDoors()
         {
             var sorted = new List<DoorData>(_doors);
             sorted.Sort(CompareByEdgeColourOffset);
@@ -125,6 +126,11 @@ namespace CBJ.Core
         internal void AddBlock(BlockData block)
         {
             _blocks.Add(block);
+        }
+
+        internal void ReplaceBlockAt(int index, BlockData block)
+        {
+            _blocks[index] = block;
         }
 
         internal void RemoveBlockAt(int index)

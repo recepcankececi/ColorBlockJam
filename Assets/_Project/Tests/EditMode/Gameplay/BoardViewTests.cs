@@ -2,6 +2,7 @@ using System.Linq;
 using CBJ.Core;
 using CBJ.Data;
 using CBJ.Gameplay;
+using CBJ.Tests.EditMode.Core;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -142,7 +143,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             var level = new LevelData(Width, Height, 30);
             level.AddDoor(new DoorData(Direction.Up, 1, 1, Blue));
-            level.AddBlock(new BlockData("L3-0", Vector2Int.zero, Red));
+            level.AddBlock(new BlockData(TestShapes.L.Cells, Vector2Int.zero, Red));
             return level;
         }
     }

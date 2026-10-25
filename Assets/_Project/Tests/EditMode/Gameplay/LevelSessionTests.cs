@@ -1,5 +1,6 @@
 using CBJ.Core;
 using CBJ.Gameplay;
+using CBJ.Tests.EditMode.Core;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools.Constraints;
@@ -193,7 +194,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             var level = new LevelData(2, 2, TimerSeconds);
             level.AddDoor(new DoorData(Direction.Down, 0, 1, Red));
-            level.AddBlock(new BlockData("I1", Vector2Int.zero, Red));
+            level.AddBlock(new BlockData(TestShapes.Single.Cells, Vector2Int.zero, Red));
             return level;
         }
 

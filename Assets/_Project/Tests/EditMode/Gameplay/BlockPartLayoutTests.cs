@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using CBJ.Core;
+using CBJ.Editor;
 using CBJ.Gameplay;
 using NUnit.Framework;
 using UnityEngine;

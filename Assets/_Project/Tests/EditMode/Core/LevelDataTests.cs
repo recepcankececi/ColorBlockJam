@@ -78,10 +78,10 @@ namespace CBJ.Tests.EditMode.Core
         }
 
         [Test]
-        public void BuildBoard_UnknownShape_Throws()
+        public void BuildBoard_BlockWithoutCells_Throws()
         {
             var level = new LevelData(4, 4, 30);
-            level.AddBlock(new BlockData("no-such-shape", Vector2Int.zero, Red));
+            level.AddBlock(default);
 
             Assert.Throws<ArgumentException>(() => level.BuildBoard());
         }
@@ -92,7 +92,7 @@ namespace CBJ.Tests.EditMode.Core
             var level = new LevelData(4, 3, 30);
             level.AddDoor(new DoorData(Direction.Up, 1, 1, Red));
             level.AddDoor(new DoorData(Direction.Up, 2, 1, Red));
-            level.AddBlock(new BlockData("I2-H", new Vector2Int(1, 2), Red));
+            level.AddBlock(new BlockData(TestShapes.Domino.Cells, new Vector2Int(1, 2), Red));
             BoardModel board = level.BuildBoard();
 
             Assert.That(new MoveResolver(board).TryStep(board.Blocks[0], Direction.Up), Is.EqualTo(StepResult.Exited));
@@ -135,7 +135,7 @@ namespace CBJ.Tests.EditMode.Core
             var level = new LevelData(3, 4, 30);
             level.AddDoor(new DoorData(Direction.Right, 1, 1, Red));
             level.AddDoor(new DoorData(Direction.Right, 2, 1, Red));
-            level.AddBlock(new BlockData("I2-V", new Vector2Int(2, 1), Red));
+            level.AddBlock(new BlockData(TestShapes.VerticalDomino.Cells, new Vector2Int(2, 1), Red));
             BoardModel board = level.BuildBoard();
 
             Assert.That(new MoveResolver(board).TryStep(board.Blocks[0], Direction.Right), Is.EqualTo(StepResult.Exited));
@@ -169,8 +169,8 @@ namespace CBJ.Tests.EditMode.Core
             var level = new LevelData(5, 6, 45);
             level.AddDoor(new DoorData(Direction.Up, 1, 2, Red));
             level.AddDoor(new DoorData(Direction.Left, 0, 1, Blue));
-            level.AddBlock(new BlockData("I2-H", Vector2Int.zero, Red));
-            level.AddBlock(new BlockData("L3-0", new Vector2Int(3, 4), Blue));
+            level.AddBlock(new BlockData(TestShapes.Domino.Cells, Vector2Int.zero, Red));
+            level.AddBlock(new BlockData(TestShapes.L.Cells, new Vector2Int(3, 4), Blue));
             return level;
         }
 

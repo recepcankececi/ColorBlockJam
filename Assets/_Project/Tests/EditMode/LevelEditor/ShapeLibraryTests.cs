@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using CBJ.Core;
+using CBJ.Editor;
 using NUnit.Framework;
 using UnityEngine;
 
-namespace CBJ.Tests.EditMode.Core
+namespace CBJ.Tests.EditMode.LevelEditor
 {
     public class ShapeLibraryTests
     {
@@ -36,6 +39,17 @@ namespace CBJ.Tests.EditMode.Core
             BlockShape shape = ShapeLibrary.Get("I3-V");
 
             Assert.That((shape.Width, shape.Height), Is.EqualTo((1, 3)));
+        }
+
+        [Test]
+        public void StampIds_WithRotation_CoverEveryId()
+        {
+            var uncovered = ShapeLibrary.Ids.Where(id => !ShapeLibrary.StampIds.Any(stamp =>
+                Enumerable.Range(0, ShapeRotation.TurnsPerCircle).Any(turns =>
+                    new HashSet<Vector2Int>(ShapeRotation.RotateClockwise(ShapeLibrary.Get(stamp).Cells, turns))
+                        .SetEquals(ShapeLibrary.Get(id).Cells))));
+
+            Assert.That(uncovered, Is.Empty);
         }
 
         [Test]

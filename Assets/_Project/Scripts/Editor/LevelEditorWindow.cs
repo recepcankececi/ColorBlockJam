@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Text;
 using CBJ.Core;
 using CBJ.Data;
 using UnityEditor;
@@ -8,19 +10,21 @@ using UnityEngine.SceneManagement;
 namespace CBJ.Editor
 {
     /// <summary>
-    /// Level editor for designers (ADR-004): pick or create a level, set size and timer, paint blocks and doors on a
-    /// visual board, then Save or Play. Edits go to a draft copy and reach the level asset only on Save.
+    /// Level editor for designers (ADR-004, ADR-007): pick or create a level, set size and timer, paint blocks and
+    /// door cells freely or stamp presets, read the checks, then Save or Play. Edits go to a draft copy and reach the
+    /// level asset only on Save.
     /// </summary>
     public sealed class LevelEditorWindow : EditorWindow
     {
         private const string MenuPath = "Tools/Color Block Jam/Level Editor";
         private const string WindowTitle = "Level Editor";
         private const string PaintUndoName = "Paint Level";
-        private const string Hint = "Left click: place    Right click / drag: erase    Ctrl+Z: undo";
+        private const string Hint = "Drag: paint    Shift+drag: grow block    Right click / drag: erase    R: rotate preset    Ctrl+Z: undo";
         private const float SidePanelWidth = 230f;
         private const float Padding = 8f;
         private const float HintHeight = 20f;
         private const float LevelListHeight = 160f;
+        private const float ChecksHeight = 150f;
         private const float ActionButtonHeight = 32f;
         private const float MinBoardAreaWidth = 320f;
         private const float MinWindowHeight = 520f;
@@ -35,8 +39,11 @@ namespace CBJ.Editor
         [SerializeField] private LevelEditorBrush _brush = new LevelEditorBrush();
         [SerializeField] private Vector2 _levelListScroll;
         [SerializeField] private Vector2 _toolScroll;
+        [SerializeField] private Vector2 _checksScroll;
 
         private readonly LevelEditorGrid _grid = new LevelEditorGrid();
+        private readonly BlockStroke _stroke = new BlockStroke();
+        private List<LevelIssue> _issues = new List<LevelIssue>();
         private LevelCatalog _catalog;
         private BlockPalette _palette;
         private GridHit _hover = GridHit.None;
@@ -57,8 +64,10 @@ namespace CBJ.Editor
         /// <summary>Writes the draft to its level asset; called by Unity when closing with unsaved changes.</summary>
         public override void SaveChanges()
         {
-            Save();
-            base.SaveChanges();
+            if (TrySave())
+            {
+                base.SaveChanges();
+            }
         }
 
         private void OnEnable()
@@ -83,7 +92,7 @@ namespace CBJ.Editor
                 }
             }
 
-            RefreshUnsavedState();
+            RefreshState();
         }
 
         private void OnDisable()
@@ -103,14 +112,29 @@ namespace CBJ.Editor
         private void OnProjectChange()
         {
             LoadProjectAssets();
-            RefreshUnsavedState();
+            RefreshState();
             Repaint();
         }
 
+        // An undo during a drag can remove the block a stroke grows, so the drag is dropped rather than applied.
         private void OnUndoRedo()
         {
-            RefreshUnsavedState();
+            CancelDrag();
+            RefreshState();
             Repaint();
+        }
+
+        private void OnLostFocus()
+        {
+            CancelDrag();
+            Repaint();
+        }
+
+        private void CancelDrag()
+        {
+            _stroke.End();
+            _dragging = false;
+            GUIUtility.hotControl = 0;
         }
 
         private void OnGUI()
@@ -121,6 +145,7 @@ namespace CBJ.Editor
                 return;
             }
 
+            HandleRotateKey();
             using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode))
             {
                 float panelHeight = position.height - Padding * 2f;
@@ -139,6 +164,20 @@ namespace CBJ.Editor
                 DrawBoard(board);
                 GUI.Label(new Rect(board.x, board.yMax, board.width, HintHeight), Hint, EditorStyles.centeredGreyMiniLabel);
             }
+        }
+
+        private void HandleRotateKey()
+        {
+            Event current = Event.current;
+            if (current.type != EventType.KeyDown || current.keyCode != KeyCode.R || EditorGUIUtility.editingTextField ||
+                _brush.Tool != LevelEditorTool.Block || !_brush.HasPreset)
+            {
+                return;
+            }
+
+            _brush.QuarterTurns = (_brush.QuarterTurns + 1) % ShapeRotation.TurnsPerCircle;
+            current.Use();
+            Repaint();
         }
 
         private void DrawSetup()
@@ -195,18 +234,19 @@ namespace CBJ.Editor
             EditorGUILayout.Space();
             EditorGUILayout.LabelField(hasUnsavedChanges ? DisplayName + " *" : DisplayName, EditorStyles.boldLabel);
             DrawLevelSettings(_draft.Level);
+            DrawChecks();
 
             GUILayout.FlexibleSpace();
             using (new EditorGUI.DisabledScope(!hasUnsavedChanges))
             {
                 if (GUILayout.Button("Save", GUILayout.Height(ActionButtonHeight)))
                 {
-                    Save();
+                    TrySave();
                 }
             }
 
-            // An empty board starts already cleared, so there is nothing to play.
-            using (new EditorGUI.DisabledScope(_draft.Level.Blocks.Count == 0))
+            // Errors are data the game would reject (an empty board, for one, starts already cleared).
+            using (new EditorGUI.DisabledScope(LevelValidator.HasErrors(_issues)))
             {
                 if (GUILayout.Button("Save & Play", GUILayout.Height(ActionButtonHeight)))
                 {
@@ -226,7 +266,7 @@ namespace CBJ.Editor
                 int removed = LevelEditOperations.Resize(level, width, height);
                 if (removed > 0)
                 {
-                    ShowNotification(new GUIContent($"Removed {removed} that no longer fit (Ctrl+Z to undo)"));
+                    ShowNotification(new GUIContent($"Removed {removed} block(s) or door(s) that no longer fit (Ctrl+Z to undo)"));
                 }
 
                 OnEdited();
@@ -257,16 +297,35 @@ namespace CBJ.Editor
             }
         }
 
+        private void DrawChecks()
+        {
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Checks", EditorStyles.boldLabel);
+            if (_issues.Count == 0)
+            {
+                EditorGUILayout.HelpBox("No problems found.", MessageType.Info);
+                return;
+            }
+
+            _checksScroll = EditorGUILayout.BeginScrollView(_checksScroll, GUILayout.Height(ChecksHeight));
+            for (int i = 0; i < _issues.Count; i++)
+            {
+                MessageType type = _issues[i].Severity == IssueSeverity.Error ? MessageType.Error : MessageType.Warning;
+                EditorGUILayout.HelpBox(_issues[i].Message, type);
+            }
+
+            EditorGUILayout.EndScrollView();
+        }
+
         private void DrawToolPanel()
         {
-            LevelData level = _draft.Level;
             _toolScroll = EditorGUILayout.BeginScrollView(_toolScroll);
             if (_brush.ColorId >= _palette.Count)
             {
                 _brush.ColorId = 0;
             }
 
-            LevelEditorPalette.Draw(_brush, _palette, SidePanelWidth - Padding * 2f, Mathf.Max(level.Width, level.Height));
+            LevelEditorPalette.Draw(_brush, _palette, SidePanelWidth - Padding * 2f);
             EditorGUILayout.EndScrollView();
         }
 
@@ -277,7 +336,7 @@ namespace CBJ.Editor
             HandleBoardInput(area);
             if (Event.current.type == EventType.Repaint)
             {
-                _grid.Draw(level, _palette, _brush, _hover, _brush.Tool == LevelEditorTool.Erase || (_dragging && _dragErases));
+                _grid.Draw(level, _palette, _brush, _hover, _brush.Tool == LevelEditorTool.Erase || (_dragging && _dragErases), _stroke);
             }
         }
 
@@ -302,13 +361,23 @@ namespace CBJ.Editor
                         break;
                     }
 
+                    _stroke.End();
                     GUIUtility.hotControl = control;
                     _dragging = true;
                     _dragErases = current.button == 1 || _brush.Tool == LevelEditorTool.Erase;
                     _lastPainted = GridHit.None;
                     Undo.IncrementCurrentGroup();
                     _dragUndoGroup = Undo.GetCurrentGroup();
-                    Paint(_grid.HitTest(current.mousePosition));
+                    GridHit hit = _grid.HitTest(current.mousePosition);
+                    if (PaintsStroke)
+                    {
+                        BeginStroke(hit, current.shift);
+                    }
+                    else
+                    {
+                        Paint(hit);
+                    }
+
                     current.Use();
                     break;
 
@@ -318,9 +387,17 @@ namespace CBJ.Editor
                         break;
                     }
 
-                    // Placing repeats only on a click; a drag that kept placing would scatter unwanted blocks.
+                    // Stamps place only on a click; a drag that kept stamping would scatter unwanted blocks.
                     UpdateHover(area, current.mousePosition);
-                    if (_dragErases)
+                    if (_stroke.IsActive)
+                    {
+                        ExtendStroke(_hover);
+                    }
+                    else if (PaintsStroke)
+                    {
+                        BeginStroke(_hover, current.shift);
+                    }
+                    else if (_dragErases || _brush.Tool == LevelEditorTool.Door)
                     {
                         Paint(_hover);
                     }
@@ -336,6 +413,11 @@ namespace CBJ.Editor
 
                     GUIUtility.hotControl = 0;
                     _dragging = false;
+                    if (_stroke.IsActive)
+                    {
+                        FinishStroke();
+                    }
+
                     Repaint();
                     Undo.CollapseUndoOperations(_dragUndoGroup);
                     current.Use();
@@ -371,15 +453,55 @@ namespace CBJ.Editor
                     ? LevelEditOperations.RemoveBlockAt(level, hit.Cell)
                     : LevelEditOperations.RemoveDoorAt(level, hit.Edge, hit.Slot);
             }
-            else if (_brush.Tool == LevelEditorTool.Block && hit.Kind == GridHitKind.Cell)
+            else if (_brush.Tool == LevelEditorTool.Block && _brush.HasPreset && hit.Kind == GridHitKind.Cell)
             {
-                Vector2Int origin = LevelEditOperations.OriginForClick(_brush.ShapeId, hit.Cell);
-                changed = LevelEditOperations.TryPlaceBlock(level, _brush.ShapeId, origin, _brush.ColorId);
+                Vector2Int[] cells = _brush.PresetCells();
+                Vector2Int origin = LevelEditOperations.OriginForClick(cells, hit.Cell);
+                changed = LevelEditOperations.TryPlaceBlock(level, cells, origin, _brush.ColorId);
             }
             else if (_brush.Tool == LevelEditorTool.Door && hit.Kind == GridHitKind.DoorSlot)
             {
-                LevelEditOperations.PlaceDoor(level, hit.Edge, hit.Slot, _brush.DoorLength, _brush.ColorId);
-                changed = true;
+                changed = LevelEditOperations.PlaceDoor(level, hit.Edge, hit.Slot, _brush.ColorId);
+            }
+
+            if (changed)
+            {
+                OnEdited();
+            }
+        }
+
+        private bool PaintsStroke => !_dragErases && _brush.Tool == LevelEditorTool.Block && !_brush.HasPreset;
+
+        // Shift on a block grows that block; anywhere else a stroke paints a new block.
+        private void BeginStroke(GridHit hit, bool extend)
+        {
+            if (hit.Kind != GridHitKind.Cell)
+            {
+                return;
+            }
+
+            int extendIndex = extend ? LevelEditOperations.FindBlockAt(_draft.Level, hit.Cell) : -1;
+            _stroke.Begin(hit.Cell, extendIndex);
+            Repaint();
+        }
+
+        private void ExtendStroke(GridHit hit)
+        {
+            if (hit.Kind == GridHitKind.Cell)
+            {
+                _stroke.ExtendTo(hit.Cell);
+                Repaint();
+            }
+        }
+
+        private void FinishStroke()
+        {
+            Undo.RecordObject(_draft, PaintUndoName);
+            bool changed = LevelEditOperations.ApplyStroke(_draft.Level, _stroke.Cells, _stroke.ExtendIndex, _brush.ColorId, out int dropped);
+            _stroke.End();
+            if (dropped > 0)
+            {
+                ShowNotification(new GUIContent($"Dropped {dropped} cell(s) not connected to the block"));
             }
 
             if (changed)
@@ -390,7 +512,7 @@ namespace CBJ.Editor
 
         private void OnEdited()
         {
-            RefreshUnsavedState();
+            RefreshState();
             Repaint();
         }
 
@@ -412,7 +534,7 @@ namespace CBJ.Editor
                 Undo.ClearUndo(_draft);
             }
 
-            RefreshUnsavedState();
+            RefreshState();
             GUI.FocusControl(null);
         }
 
@@ -434,7 +556,7 @@ namespace CBJ.Editor
                 "Unsaved changes", $"Save the changes to {DisplayName}?", "Save", "Cancel", "Discard");
             if (choice == 0)
             {
-                Save();
+                return TrySave();
             }
 
             return choice != 1;
@@ -451,13 +573,54 @@ namespace CBJ.Editor
                 LevelEditorAssets.SaveLevel(_draft, _asset);
             }
 
-            RefreshUnsavedState();
+            RefreshState();
             ShowNotification(new GUIContent("Saved " + _asset.name));
+        }
+
+        // Errors are data the game cannot load, so they block the save; warnings ask first. Returns whether the asset
+        // now matches the draft.
+        private bool TrySave()
+        {
+            if (!hasUnsavedChanges && _asset != null)
+            {
+                return true;
+            }
+
+            if (LevelValidator.HasErrors(_issues))
+            {
+                EditorUtility.DisplayDialog("Cannot save level",
+                    $"The game could not load {DisplayName}. Fix these first:\n{IssueList()}", "OK");
+                return false;
+            }
+
+            if (_issues.Count > 0 && !EditorUtility.DisplayDialog("Save level with warnings?",
+                    $"{DisplayName} may not be winnable:\n{IssueList()}", "Save anyway", "Cancel"))
+            {
+                return false;
+            }
+
+            Save();
+            return true;
+        }
+
+        private string IssueList()
+        {
+            var list = new StringBuilder();
+            for (int i = 0; i < _issues.Count; i++)
+            {
+                list.Append("\n- ").Append(_issues[i].Message);
+            }
+
+            return list.ToString();
         }
 
         private void SaveAndPlay()
         {
-            Save();
+            if (!TrySave())
+            {
+                return;
+            }
+
             if (_catalog.IndexOf(_asset) < 0)
             {
                 LevelEditorAssets.AddToCatalog(_catalog, _asset);
@@ -484,10 +647,12 @@ namespace CBJ.Editor
         }
 
         // A new level counts as changed once it differs from the defaults; a loaded one once it differs from its asset.
-        private void RefreshUnsavedState()
+        // The checks rerun with it, so the panel and Save & Play never lag behind the board.
+        private void RefreshState()
         {
             LevelData saved = _asset != null ? _asset.Level : NewLevelData();
             hasUnsavedChanges = JsonUtility.ToJson(_draft.Level) != JsonUtility.ToJson(saved);
+            _issues = LevelValidator.Validate(_draft.Level);
         }
 
         private static LevelData NewLevelData()

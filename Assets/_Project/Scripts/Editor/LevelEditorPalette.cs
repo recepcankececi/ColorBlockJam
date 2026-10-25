@@ -7,7 +7,7 @@ using UnityEngine;
 namespace CBJ.Editor
 {
     /// <summary>
-    /// The level editor's tool panel: tool choice, colour swatches, shape thumbnails and door length.
+    /// The level editor's tool panel: tool choice, colour swatches, freehand or preset stamp, and per-tool hints.
     /// </summary>
     public static class LevelEditorPalette
     {
@@ -22,14 +22,14 @@ namespace CBJ.Editor
         private static readonly int ThumbnailGridCells = LargestShapeSide();
 
         /// <summary>Draws the panel into the current layout area and updates <paramref name="brush"/>.</summary>
-        public static void Draw(LevelEditorBrush brush, BlockPalette palette, float width, int longestEdge)
+        public static void Draw(LevelEditorBrush brush, BlockPalette palette, float width)
         {
             EditorGUILayout.LabelField("Tool", EditorStyles.boldLabel);
             brush.Tool = (LevelEditorTool)GUILayout.Toolbar((int)brush.Tool, ToolLabels);
 
             if (brush.Tool == LevelEditorTool.Erase)
             {
-                EditorGUILayout.HelpBox("Click a block or door to remove it.", MessageType.None);
+                EditorGUILayout.HelpBox("Click or drag over blocks and door cells to remove them.", MessageType.None);
                 return;
             }
 
@@ -41,13 +41,21 @@ namespace CBJ.Editor
             if (brush.Tool == LevelEditorTool.Block)
             {
                 EditorGUILayout.LabelField("Shape", EditorStyles.boldLabel);
-                brush.ShapeId = DrawShapes(brush.ShapeId, palette, brush.ColorId, width);
+                if (GUILayout.Toggle(!brush.HasPreset, "Freehand", EditorStyles.miniButton) && brush.HasPreset)
+                {
+                    brush.PresetId = string.Empty;
+                }
+
+                DrawPresets(brush, palette, width);
+                EditorGUILayout.HelpBox(brush.HasPreset
+                        ? "Click to stamp the preset. R rotates it 90°."
+                        : "Drag over cells to paint one block. Shift+drag from a block to add cells to it.",
+                    MessageType.None);
             }
             else
             {
-                EditorGUILayout.LabelField("Door", EditorStyles.boldLabel);
-                brush.DoorLength = EditorGUILayout.IntSlider("Length", brush.DoorLength, 1, longestEdge);
-                EditorGUILayout.HelpBox("Click a slot around the board to place a door there.", MessageType.None);
+                EditorGUILayout.HelpBox("Click or drag over the slots around the board to paint door cells. " +
+                                        "Neighbouring cells of one colour form one door.", MessageType.None);
             }
         }
 
@@ -81,10 +89,10 @@ namespace CBJ.Editor
             return selected;
         }
 
-        private static string DrawShapes(string selected, BlockPalette palette, int colorId, float width)
+        private static void DrawPresets(LevelEditorBrush brush, BlockPalette palette, float width)
         {
-            IReadOnlyList<string> ids = ShapeLibrary.Ids;
-            Color color = LevelEditorGrid.ColorOf(palette, colorId);
+            IReadOnlyList<string> ids = ShapeLibrary.StampIds;
+            Color color = LevelEditorGrid.ColorOf(palette, brush.ColorId);
             int perRow = Mathf.Max(1, Mathf.FloorToInt(width / ThumbnailSize));
             for (int start = 0; start < ids.Count; start += perRow)
             {
@@ -92,34 +100,40 @@ namespace CBJ.Editor
                 for (int i = start; i < Mathf.Min(start + perRow, ids.Count); i++)
                 {
                     Rect rect = GUILayoutUtility.GetRect(ThumbnailSize, ThumbnailSize, GUILayout.Width(ThumbnailSize));
-                    if (GUI.Button(rect, new GUIContent(string.Empty, ids[i])))
+                    if (GUI.Button(rect, new GUIContent(string.Empty, ids[i])) && ids[i] != brush.PresetId)
                     {
-                        selected = ids[i];
+                        brush.PresetId = ids[i];
+                        brush.QuarterTurns = 0;
                     }
 
-                    if (ids[i] == selected)
+                    bool selected = ids[i] == brush.PresetId;
+                    if (selected)
                     {
                         EditorGUI.DrawRect(rect, SelectionColor);
                         EditorGUI.DrawRect(Shrink(rect, SelectionBorder), SelectedThumbnailBackground);
                     }
 
-                    DrawThumbnail(Shrink(rect, ThumbnailPadding), ShapeLibrary.Get(ids[i]), color);
+                    IReadOnlyList<Vector2Int> cells = selected ? brush.PresetCells() : ShapeLibrary.Get(ids[i]).Cells;
+                    DrawThumbnail(Shrink(rect, ThumbnailPadding), cells, color);
                 }
 
                 GUILayout.FlexibleSpace();
                 EditorGUILayout.EndHorizontal();
             }
-
-            return selected;
         }
 
         // Every shape is drawn on the same cell scale, so sizes compare at a glance; row 0 at the bottom.
-        private static void DrawThumbnail(Rect area, BlockShape shape, Color color)
+        private static void DrawThumbnail(Rect area, IReadOnlyList<Vector2Int> cells, Color color)
         {
+            Vector2Int size = Vector2Int.zero;
+            for (int i = 0; i < cells.Count; i++)
+            {
+                size = Vector2Int.Max(size, cells[i] + Vector2Int.one);
+            }
+
             float cell = area.width / ThumbnailGridCells;
-            float left = area.center.x - shape.Width * cell * 0.5f;
-            float bottom = area.center.y + shape.Height * cell * 0.5f;
-            IReadOnlyList<Vector2Int> cells = shape.Cells;
+            float left = area.center.x - size.x * cell * 0.5f;
+            float bottom = area.center.y + size.y * cell * 0.5f;
             for (int i = 0; i < cells.Count; i++)
             {
                 var rect = new Rect(left + cells[i].x * cell, bottom - (cells[i].y + 1) * cell, cell, cell);

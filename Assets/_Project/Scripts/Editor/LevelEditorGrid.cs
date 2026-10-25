@@ -26,6 +26,7 @@ namespace CBJ.Editor
         private static readonly Color InvalidPreview = new Color(1f, 0.15f, 0.15f, 0.45f);
         private static readonly Color EraseHighlight = new Color(1f, 1f, 1f, 0.9f);
         private static readonly Color MissingColor = Color.magenta;
+        private static readonly Vector2Int[] SingleCell = { Vector2Int.zero };
 
         private Vector2 _boardTopLeft;
         private float _cell;
@@ -81,10 +82,10 @@ namespace CBJ.Editor
         }
 
         /// <summary>
-        /// Draws the level and the brush preview at <paramref name="hover"/>; <paramref name="erasing"/> shows what a
-        /// click would remove instead.
+        /// Draws the level and the brush preview at <paramref name="hover"/> or along the active
+        /// <paramref name="stroke"/>; <paramref name="erasing"/> shows what a click would remove instead.
         /// </summary>
-        public void Draw(LevelData level, BlockPalette palette, LevelEditorBrush brush, GridHit hover, bool erasing)
+        public void Draw(LevelData level, BlockPalette palette, LevelEditorBrush brush, GridHit hover, bool erasing, BlockStroke stroke)
         {
             EditorGUI.DrawRect(BoardRect(), BoardColor);
             for (int y = 0; y < _height; y++)
@@ -106,10 +107,10 @@ namespace CBJ.Editor
             IReadOnlyList<DoorData> doors = level.Doors;
             for (int i = 0; i < doors.Count; i++)
             {
-                EditorGUI.DrawRect(DoorRect(doors[i]), ColorOf(palette, doors[i].ColorId));
+                DrawDoor(level, doors[i], ColorOf(palette, doors[i].ColorId));
             }
 
-            DrawPreview(level, palette, brush, hover, erasing);
+            DrawPreview(level, palette, brush, hover, erasing, stroke);
         }
 
         /// <summary>Palette colour for <paramref name="colorId"/>; magenta when the palette lacks it.</summary>
@@ -129,7 +130,7 @@ namespace CBJ.Editor
         // Neighbouring cells of one block are bridged so each block reads as one piece, separate from its neighbours.
         private void DrawBlock(BlockData block, Color color)
         {
-            IReadOnlyList<Vector2Int> cells = block.Shape.Cells;
+            IReadOnlyList<Vector2Int> cells = block.Cells;
             for (int i = 0; i < cells.Count; i++)
             {
                 Vector2Int cell = block.Origin + cells[i];
@@ -148,8 +149,31 @@ namespace CBJ.Editor
             }
         }
 
-        private void DrawPreview(LevelData level, BlockPalette palette, LevelEditorBrush brush, GridHit hover, bool erasing)
+        // Doors are painted one cell at a time; the gap to a same-colour neighbour is bridged so they read as one opening.
+        private void DrawDoor(LevelData level, DoorData door, Color color)
         {
+            Rect rect = DoorRect(door);
+            EditorGUI.DrawRect(rect, color);
+            int next = LevelEditOperations.FindDoorAt(level, door.Edge, door.Offset + door.Length);
+            if (next < 0 || level.Doors[next].ColorId != door.ColorId)
+            {
+                return;
+            }
+
+            Rect bridge = door.Edge.IsVertical()
+                ? new Rect(rect.xMax, rect.y, CellGap * 2f, rect.height)
+                : new Rect(rect.x, rect.y - CellGap * 2f, rect.width, CellGap * 2f);
+            EditorGUI.DrawRect(bridge, color);
+        }
+
+        private void DrawPreview(LevelData level, BlockPalette palette, LevelEditorBrush brush, GridHit hover, bool erasing, BlockStroke stroke)
+        {
+            if (stroke.IsActive)
+            {
+                DrawStrokePreview(level, palette, brush, stroke);
+                return;
+            }
+
             if (hover.Kind == GridHitKind.None)
             {
                 return;
@@ -161,23 +185,40 @@ namespace CBJ.Editor
             }
             else if (brush.Tool == LevelEditorTool.Block && hover.Kind == GridHitKind.Cell)
             {
-                Vector2Int origin = LevelEditOperations.OriginForClick(brush.ShapeId, hover.Cell);
-                bool fits = LevelEditOperations.CanPlaceBlock(level, brush.ShapeId, origin);
+                IReadOnlyList<Vector2Int> cells = brush.HasPreset ? brush.PresetCells() : SingleCell;
+                Vector2Int origin = LevelEditOperations.OriginForClick(cells, hover.Cell);
+                bool fits = LevelEditOperations.CanPlaceBlock(level, cells, origin);
                 Color tint = fits ? ColorOf(palette, brush.ColorId) * ValidPreview : InvalidPreview;
-                IReadOnlyList<Vector2Int> cells = ShapeLibrary.Get(brush.ShapeId).Cells;
                 for (int i = 0; i < cells.Count; i++)
                 {
-                    Vector2Int cell = origin + cells[i];
-                    if (cell.x >= 0 && cell.y >= 0 && cell.x < _width && cell.y < _height)
-                    {
-                        EditorGUI.DrawRect(Inset(CellRect(cell)), tint);
-                    }
+                    DrawPreviewCell(origin + cells[i], tint);
                 }
             }
             else if (brush.Tool == LevelEditorTool.Door && hover.Kind == GridHitKind.DoorSlot)
             {
-                DoorData door = LevelEditOperations.FitDoor(level, hover.Edge, hover.Slot, brush.DoorLength, brush.ColorId);
+                var door = new DoorData(hover.Edge, hover.Slot, 1, brush.ColorId);
                 EditorGUI.DrawRect(DoorRect(door), ColorOf(palette, brush.ColorId) * ValidPreview);
+            }
+        }
+
+        // Stroke cells that will become the block are tinted; cells that are taken or do not connect show red.
+        private void DrawStrokePreview(LevelData level, BlockPalette palette, LevelEditorBrush brush, BlockStroke stroke)
+        {
+            List<Vector2Int> kept = LevelEditOperations.StrokeBlockCells(level, stroke.Cells, stroke.ExtendIndex, out _);
+            int colorId = stroke.ExtendIndex >= 0 ? level.Blocks[stroke.ExtendIndex].ColorId : brush.ColorId;
+            Color tint = ColorOf(palette, colorId) * ValidPreview;
+            IReadOnlyList<Vector2Int> cells = stroke.Cells;
+            for (int i = 0; i < cells.Count; i++)
+            {
+                DrawPreviewCell(cells[i], kept.Contains(cells[i]) ? tint : InvalidPreview);
+            }
+        }
+
+        private void DrawPreviewCell(Vector2Int cell, Color tint)
+        {
+            if (cell.x >= 0 && cell.y >= 0 && cell.x < _width && cell.y < _height)
+            {
+                EditorGUI.DrawRect(Inset(CellRect(cell)), tint);
             }
         }
 
@@ -189,7 +230,7 @@ namespace CBJ.Editor
                 if (index >= 0)
                 {
                     BlockData block = level.Blocks[index];
-                    IReadOnlyList<Vector2Int> cells = block.Shape.Cells;
+                    IReadOnlyList<Vector2Int> cells = block.Cells;
                     for (int i = 0; i < cells.Count; i++)
                     {
                         DrawOutline(Inset(CellRect(block.Origin + cells[i])), EraseHighlight);
@@ -201,7 +242,7 @@ namespace CBJ.Editor
                 int index = LevelEditOperations.FindDoorAt(level, hover.Edge, hover.Slot);
                 if (index >= 0)
                 {
-                    DrawOutline(DoorRect(level.Doors[index]), EraseHighlight);
+                    DrawOutline(DoorRect(new DoorData(hover.Edge, hover.Slot, 1, level.Doors[index].ColorId)), EraseHighlight);
                 }
             }
         }

@@ -6,7 +6,7 @@ namespace CBJ.Editor
 {
     /// <summary>
     /// The edits the level editor makes to a <see cref="LevelData"/>. Every edit keeps the level a legal board:
-    /// blocks stay inside and never overlap, doors stay on their edge and never overlap on the same edge.
+    /// blocks stay inside, never overlap and stay 4-connected; doors stay on their edge and never overlap.
     /// </summary>
     public static class LevelEditOperations
     {
@@ -16,7 +16,7 @@ namespace CBJ.Editor
             IReadOnlyList<BlockData> blocks = level.Blocks;
             for (int i = 0; i < blocks.Count; i++)
             {
-                if (Covers(blocks[i], cell))
+                if (blocks[i].Covers(cell))
                 {
                     return i;
                 }
@@ -26,22 +26,20 @@ namespace CBJ.Editor
         }
 
         /// <summary>
-        /// Origin that puts the shape's top-left filled cell on <paramref name="clicked"/>, so a click always lands on
+        /// Origin that puts the stamp's top-left filled cell on <paramref name="clicked"/>, so a click always lands on
         /// the block it places, even for shapes whose bounding-box corner is empty.
         /// </summary>
-        public static Vector2Int OriginForClick(string shapeId, Vector2Int clicked)
+        public static Vector2Int OriginForClick(IReadOnlyList<Vector2Int> cells, Vector2Int clicked)
         {
-            return clicked - ShapeLibrary.Get(shapeId).Cells[0];
+            return clicked - ShapeRotation.Anchor(cells);
         }
 
-        /// <summary>True when the shape fits inside the board at <paramref name="origin"/> without overlapping.</summary>
-        public static bool CanPlaceBlock(LevelData level, string shapeId, Vector2Int origin)
+        /// <summary>True when the cells fit inside the board at <paramref name="origin"/> without overlapping.</summary>
+        public static bool CanPlaceBlock(LevelData level, IReadOnlyList<Vector2Int> cells, Vector2Int origin)
         {
-            IReadOnlyList<Vector2Int> cells = ShapeLibrary.Get(shapeId).Cells;
             for (int i = 0; i < cells.Count; i++)
             {
-                Vector2Int cell = origin + cells[i];
-                if (!IsInside(level, cell) || FindBlockAt(level, cell) >= 0)
+                if (!IsFree(level, origin + cells[i]))
                 {
                     return false;
                 }
@@ -51,14 +49,78 @@ namespace CBJ.Editor
         }
 
         /// <summary>Adds a block when it fits; returns whether it was added.</summary>
-        public static bool TryPlaceBlock(LevelData level, string shapeId, Vector2Int origin, int colorId)
+        public static bool TryPlaceBlock(LevelData level, IReadOnlyList<Vector2Int> cells, Vector2Int origin, int colorId)
         {
-            if (!CanPlaceBlock(level, shapeId, origin))
+            if (!CanPlaceBlock(level, cells, origin))
             {
                 return false;
             }
 
-            level.AddBlock(new BlockData(shapeId, origin, colorId));
+            level.AddBlock(new BlockData(cells, origin, colorId));
+            return true;
+        }
+
+        /// <summary>
+        /// Board cells of the block a stroke would leave: free stroke cells 4-connected to the first free one, or, when
+        /// <paramref name="extendIndex"/> names a block, that block's cells plus the free stroke cells connected to it.
+        /// <paramref name="dropped"/> counts free stroke cells left out because they do not connect. Empty when the
+        /// stroke paints nothing.
+        /// </summary>
+        public static List<Vector2Int> StrokeBlockCells(LevelData level, IReadOnlyList<Vector2Int> stroke, int extendIndex, out int dropped)
+        {
+            var free = new List<Vector2Int>(stroke.Count);
+            for (int i = 0; i < stroke.Count; i++)
+            {
+                if (IsFree(level, stroke[i]))
+                {
+                    free.Add(stroke[i]);
+                }
+            }
+
+            if (extendIndex < 0)
+            {
+                List<Vector2Int> painted = free.Count == 0 ? free : CellGroup.ConnectedTo(free, free[0]);
+                dropped = free.Count - painted.Count;
+                return painted;
+            }
+
+            BlockData block = level.Blocks[extendIndex];
+            var candidates = new List<Vector2Int>(free);
+            for (int i = 0; i < block.Cells.Count; i++)
+            {
+                candidates.Add(block.Origin + block.Cells[i]);
+            }
+
+            List<Vector2Int> grown = CellGroup.ConnectedTo(candidates, block.Origin + block.Cells[0]);
+            dropped = candidates.Count - grown.Count;
+            return grown;
+        }
+
+        /// <summary>
+        /// Applies a finished stroke: paints a new block of <paramref name="colorId"/>, or grows the block named by
+        /// <paramref name="extendIndex"/> (it keeps its colour). Returns whether the level changed.
+        /// </summary>
+        public static bool ApplyStroke(LevelData level, IReadOnlyList<Vector2Int> stroke, int extendIndex, int colorId, out int dropped)
+        {
+            List<Vector2Int> cells = StrokeBlockCells(level, stroke, extendIndex, out dropped);
+            if (extendIndex < 0)
+            {
+                if (cells.Count == 0)
+                {
+                    return false;
+                }
+
+                level.AddBlock(new BlockData(cells, Vector2Int.zero, colorId));
+                return true;
+            }
+
+            BlockData block = level.Blocks[extendIndex];
+            if (cells.Count == block.Cells.Count)
+            {
+                return false;
+            }
+
+            level.ReplaceBlockAt(extendIndex, new BlockData(cells, Vector2Int.zero, block.ColorId));
             return true;
         }
 
@@ -91,34 +153,31 @@ namespace CBJ.Editor
         }
 
         /// <summary>
-        /// The door <see cref="PlaceDoor"/> would add: starts at <paramref name="slot"/>, shifted back and shortened
-        /// as needed so it fits the edge.
+        /// Paints one door cell of <paramref name="colorId"/> at <paramref name="slot"/>, replacing whatever door covered
+        /// that cell; returns whether the level changed.
         /// </summary>
-        public static DoorData FitDoor(LevelData level, Direction edge, int slot, int length, int colorId)
+        public static bool PlaceDoor(LevelData level, Direction edge, int slot, int colorId)
         {
-            int edgeLength = level.EdgeLength(edge);
-            int fitted = Mathf.Clamp(length, 1, edgeLength);
-            int offset = Mathf.Clamp(slot, 0, edgeLength - fitted);
-            return new DoorData(edge, offset, fitted, colorId);
-        }
-
-        /// <summary>Adds the fitted door and removes any door it overlaps on the same edge.</summary>
-        public static void PlaceDoor(LevelData level, Direction edge, int slot, int length, int colorId)
-        {
-            DoorData door = FitDoor(level, edge, slot, length, colorId);
-            IReadOnlyList<DoorData> doors = level.Doors;
-            for (int i = doors.Count - 1; i >= 0; i--)
+            if (slot < 0 || slot >= level.EdgeLength(edge))
             {
-                if (doors[i].Edge == edge && Overlaps(doors[i], door))
-                {
-                    level.RemoveDoorAt(i);
-                }
+                return false;
             }
 
-            level.AddDoor(door);
+            int index = FindDoorAt(level, edge, slot);
+            if (index >= 0 && level.Doors[index].ColorId == colorId)
+            {
+                return false;
+            }
+
+            RemoveDoorAt(level, edge, slot);
+            level.AddDoor(new DoorData(edge, slot, 1, colorId));
+            return true;
         }
 
-        /// <summary>Removes the door covering <paramref name="slot"/>; returns whether there was one.</summary>
+        /// <summary>
+        /// Removes the door cell at <paramref name="slot"/>; a longer door keeps its cells on either side. Returns
+        /// whether there was a door there.
+        /// </summary>
         public static bool RemoveDoorAt(LevelData level, Direction edge, int slot)
         {
             int index = FindDoorAt(level, edge, slot);
@@ -127,7 +186,19 @@ namespace CBJ.Editor
                 return false;
             }
 
+            DoorData door = level.Doors[index];
             level.RemoveDoorAt(index);
+            if (slot > door.Offset)
+            {
+                level.AddDoor(new DoorData(edge, door.Offset, slot - door.Offset, door.ColorId));
+            }
+
+            int end = door.Offset + door.Length;
+            if (slot + 1 < end)
+            {
+                level.AddDoor(new DoorData(edge, slot + 1, end - slot - 1, door.ColorId));
+            }
+
             return true;
         }
 
@@ -154,51 +225,40 @@ namespace CBJ.Editor
             IReadOnlyList<BlockData> blocks = level.Blocks;
             for (int i = blocks.Count - 1; i >= 0; i--)
             {
-                BlockShape shape = blocks[i].Shape;
-                Vector2Int origin = blocks[i].Origin;
-                if (origin.x + shape.Width > width || origin.y + shape.Height > height)
+                Vector2Int end = blocks[i].Origin + blocks[i].Size;
+                if (end.x > width || end.y > height)
                 {
                     level.RemoveBlockAt(i);
                     removed++;
                 }
             }
 
+            // Door cells past the new edge go; a longer door keeps the cells that still fit.
             IReadOnlyList<DoorData> doors = level.Doors;
             for (int i = doors.Count - 1; i >= 0; i--)
             {
-                if (doors[i].Offset + doors[i].Length > level.EdgeLength(doors[i].Edge))
+                DoorData door = doors[i];
+                int edgeLength = level.EdgeLength(door.Edge);
+                if (door.Offset + door.Length <= edgeLength)
                 {
-                    level.RemoveDoorAt(i);
-                    removed++;
+                    continue;
+                }
+
+                level.RemoveDoorAt(i);
+                removed++;
+                if (door.Offset < edgeLength)
+                {
+                    level.AddDoor(new DoorData(door.Edge, door.Offset, edgeLength - door.Offset, door.ColorId));
                 }
             }
 
             return removed;
         }
 
-        private static bool IsInside(LevelData level, Vector2Int cell)
+        private static bool IsFree(LevelData level, Vector2Int cell)
         {
-            return cell.x >= 0 && cell.y >= 0 && cell.x < level.Width && cell.y < level.Height;
-        }
-
-        private static bool Covers(BlockData block, Vector2Int cell)
-        {
-            IReadOnlyList<Vector2Int> cells = block.Shape.Cells;
-            Vector2Int local = cell - block.Origin;
-            for (int i = 0; i < cells.Count; i++)
-            {
-                if (cells[i] == local)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static bool Overlaps(DoorData a, DoorData b)
-        {
-            return a.Offset < b.Offset + b.Length && b.Offset < a.Offset + a.Length;
+            bool inside = cell.x >= 0 && cell.y >= 0 && cell.x < level.Width && cell.y < level.Height;
+            return inside && FindBlockAt(level, cell) < 0;
         }
     }
 }
