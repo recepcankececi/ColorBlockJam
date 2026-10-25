@@ -10,8 +10,8 @@ namespace CBJ.Gameplay
     /// <summary>
     /// Builds the board of one attempt from the supplied pieces (floor, wall ring, doors, blocks) and keeps the block
     /// views in step with the model through its events (ADR-001). Each block's pieces are merged into one mesh, so a
-    /// block is one draw call. Drag input lifts, offsets and drops a block's view here; the view never changes the
-    /// model. All pieces and views are pooled across attempts.
+    /// block is one draw call; an arrow block's arrow rides in the same mesh. Drag input lifts, offsets and drops a
+    /// block's view here; the view never changes the model. All pieces and views are pooled across attempts.
     /// </summary>
     public sealed class BoardView : MonoBehaviour
     {
@@ -52,6 +52,8 @@ namespace CBJ.Gameplay
         private Transform _poolRoot;
         private BlockMeshBuilder _blockMesh;
         private Material _blockMaterial;
+        private Material _arrowMaterial;
+        private Material _iceMaterial;
         private MeshPiecePool _floorPool;
         private MeshPiecePool _wallPool;
         private MeshPiecePool _cornerPool;
@@ -116,6 +118,8 @@ namespace CBJ.Gameplay
 
             _blockMesh = new BlockMeshBuilder(skin);
             _blockMaterial = skin.BlockMaterial;
+            _arrowMaterial = skin.BlockArrowMaterial;
+            _iceMaterial = skin.IceMaterial;
             _floorPool = new MeshPiecePool("FloorTile", skin.FloorTile, skin.FloorMaterial, _poolRoot);
             _wallPool = new MeshPiecePool("Wall", skin.Wall, skin.WallMaterial, _poolRoot);
             _cornerPool = new MeshPiecePool("WallCorner", skin.WallCorner, skin.WallMaterial, _poolRoot);
@@ -245,6 +249,8 @@ namespace CBJ.Gameplay
             Unsubscribe();
             _board.BlockMoved += OnBlockMoved;
             _board.BlockExited += OnBlockExited;
+            _board.BlockDestroyed += OnBlockDestroyed;
+            _board.IceLayerRemoved += OnIceLayerRemoved;
         }
 
         private void Unsubscribe()
@@ -256,6 +262,8 @@ namespace CBJ.Gameplay
 
             _board.BlockMoved -= OnBlockMoved;
             _board.BlockExited -= OnBlockExited;
+            _board.BlockDestroyed -= OnBlockDestroyed;
+            _board.IceLayerRemoved -= OnIceLayerRemoved;
         }
 
         private void OnBlockMoved(Block block, Vector2Int from, Vector2Int to)
@@ -275,6 +283,27 @@ namespace CBJ.Gameplay
             Vector2 exit = block.Origin + door.Edge.ToOffset() * ExitTravelCells;
             view.Exit(Layout.ToLocal(exit), _onExitFinished);
             _viewsByDoor[door].Open(_doorDepth, _config.DoorSinkDuration, _config.ExitDuration);
+        }
+
+        // A destroyed block shrinks away where it stands.
+        private void OnBlockDestroyed(Block block)
+        {
+            BlockView view = _viewsByBlock[block];
+            _viewsByBlock.Remove(block);
+            if (_shadowOwner == view)
+            {
+                ReleaseShadow();
+            }
+
+            view.Exit(Layout.ToLocal(block.Origin), _onExitFinished);
+        }
+
+        private void OnIceLayerRemoved(Block block, int remaining)
+        {
+            if (remaining == 0)
+            {
+                _viewsByBlock[block].Thaw();
+            }
         }
 
         private void OnExitFinished(BlockView view)
@@ -409,9 +438,27 @@ namespace CBJ.Gameplay
                 _blockMesh.Add(part.Kind, position, turn * BlockPartUpright);
             }
 
+            if (block.Kind == BlockKind.Arrow)
+            {
+                AddArrow(block);
+            }
+
             _blockMesh.WriteTo(view.Mesh);
+            view.SetKind(_blockMesh.HasDecal, block.IceLayers > 0);
+
+            // Only the block material is tinted; the arrow keeps its own colour.
             SetTint(block.ColorId);
-            view.Renderer.SetPropertyBlock(_tint);
+            view.Renderer.SetPropertyBlock(_tint, 0);
+        }
+
+        // The arrow sits on the block's top face, sunk in so only its relief shows; the supplied arrow points along
+        // the board's vertical axis once stood up like the block pieces.
+        private void AddArrow(Block block)
+        {
+            ArrowPlacement.Find(block.Shape, block.ArrowAxis, out Vector2 center, out int length);
+            var position = new Vector3(center.x * BoardLayout.CellSize, _pickHeight - _config.ArrowSink, center.y * BoardLayout.CellSize);
+            Quaternion rotation = block.ArrowAxis == Axis.Horizontal ? Turn(1) * BlockPartUpright : BlockPartUpright;
+            _blockMesh.AddArrow(length, position, rotation);
         }
 
         private void SetTint(int colorId)
@@ -430,7 +477,7 @@ namespace CBJ.Gameplay
         private BlockView CreateBlockView()
         {
             var view = CreatePooledView("Block").AddComponent<BlockView>();
-            view.Initialize(_blockMaterial, _config);
+            view.Initialize(_blockMaterial, _arrowMaterial, _iceMaterial, _config);
             return view;
         }
 

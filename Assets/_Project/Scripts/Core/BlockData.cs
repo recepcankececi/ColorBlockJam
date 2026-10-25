@@ -5,9 +5,9 @@ using UnityEngine;
 namespace CBJ.Core
 {
     /// <summary>
-    /// Serialized form of a <see cref="Block"/>: its cells, a colour and a start cell (ADR-007). Cells are stored
-    /// normalised like <see cref="BlockShape"/> (bounding-box corner at (0,0)) and sorted, so equal blocks serialize
-    /// identically.
+    /// Serialized form of a <see cref="Block"/>: its cells, a colour, a start cell (ADR-007) and its kind (ADR-008).
+    /// Cells are stored normalised like <see cref="BlockShape"/> (bounding-box corner at (0,0)) and sorted, so equal
+    /// blocks serialize identically. Data saved without a kind loads as a normal block.
     /// </summary>
     [Serializable]
     public struct BlockData : IEquatable<BlockData>
@@ -15,12 +15,21 @@ namespace CBJ.Core
         [SerializeField] private List<Vector2Int> _cells;
         [SerializeField] private Vector2Int _origin;
         [SerializeField] private int _colorId;
+        [SerializeField] private BlockKind _kind;
+        [SerializeField] private Axis _arrowAxis;
+        [SerializeField] private int _iceLayers;
 
         /// <summary>
         /// Creates block data covering <c>origin + cells[i]</c>. Cells may be in any position; they are normalised and
         /// the origin moves with them, so the covered board cells stay the same.
         /// </summary>
         public BlockData(IReadOnlyList<Vector2Int> cells, Vector2Int origin, int colorId)
+            : this(cells, origin, colorId, BlockTraits.Normal)
+        {
+        }
+
+        /// <summary>Creates block data like <see cref="BlockData(IReadOnlyList{Vector2Int}, Vector2Int, int)"/> with a kind.</summary>
+        public BlockData(IReadOnlyList<Vector2Int> cells, Vector2Int origin, int colorId, BlockTraits traits)
         {
             if (cells == null || cells.Count == 0)
             {
@@ -42,6 +51,9 @@ namespace CBJ.Core
             _cells.Sort(CompareRowThenColumn);
             _origin = origin + min;
             _colorId = colorId;
+            _kind = traits.Kind;
+            _arrowAxis = traits.ArrowAxis;
+            _iceLayers = traits.IceLayers;
         }
 
         /// <summary>Normalised cell offsets from <see cref="Origin"/>; empty only for corrupt data.</summary>
@@ -52,6 +64,9 @@ namespace CBJ.Core
 
         /// <summary>Palette index of the block.</summary>
         public int ColorId => _colorId;
+
+        /// <summary>Kind of the block and its arrow axis or ice layers, as stored.</summary>
+        public BlockTraits Traits => new BlockTraits(_kind, _arrowAxis, _iceLayers);
 
         /// <summary>Bounding-box size in cells.</summary>
         public Vector2Int Size
@@ -88,13 +103,14 @@ namespace CBJ.Core
         /// <summary>Creates a fresh runtime block at the start cell; throws when the data has no or duplicate cells.</summary>
         public Block ToBlock()
         {
-            return new Block(new BlockShape(Cells), _colorId, _origin);
+            return new Block(new BlockShape(Cells), _colorId, _origin, Traits);
         }
 
         /// <inheritdoc />
         public bool Equals(BlockData other)
         {
-            if (_origin != other._origin || _colorId != other._colorId || Cells.Count != other.Cells.Count)
+            if (_origin != other._origin || _colorId != other._colorId || !Traits.Equals(other.Traits) ||
+                Cells.Count != other.Cells.Count)
             {
                 return false;
             }
@@ -119,13 +135,13 @@ namespace CBJ.Core
         /// <inheritdoc />
         public override int GetHashCode()
         {
-            return HashCode.Combine(_origin, _colorId, Cells.Count);
+            return HashCode.Combine(_origin, _colorId, Traits, Cells.Count);
         }
 
         /// <inheritdoc />
         public override string ToString()
         {
-            return $"Block(colour {_colorId}, origin {_origin}, {Cells.Count} cells)";
+            return $"Block({Traits}, colour {_colorId}, origin {_origin}, {Cells.Count} cells)";
         }
 
         private static int CompareRowThenColumn(Vector2Int a, Vector2Int b)

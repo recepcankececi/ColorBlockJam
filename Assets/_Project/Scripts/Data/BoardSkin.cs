@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace CBJ.Data
@@ -28,6 +29,12 @@ namespace CBJ.Data
         [SerializeField] private Material _wallMaterial;
         [SerializeField] private Material _doorMaterial;
         [SerializeField] private Material _arrowMaterial;
+
+        [Header("Block kinds (Arrows.fbx, icetexture.jpg)")]
+        [Tooltip("Arrow decals by length: one, two and three cells. Must be imported readable.")]
+        [SerializeField] private Mesh[] _blockArrows = new Mesh[0];
+        [SerializeField] private Material _blockArrowMaterial;
+        [SerializeField] private Material _iceMaterial;
 
         [Header("Held block shadow")]
         [SerializeField] private Mesh _shadowMesh;
@@ -74,6 +81,18 @@ namespace CBJ.Data
 
         /// <summary>Material of door arrows.</summary>
         public Material ArrowMaterial => _arrowMaterial;
+
+        /// <summary>
+        /// Arrow decals of arrow blocks, index 0 one cell long, each longer by one cell; modelled like the block
+        /// pieces (lying in XY, thickness along -Z) and pointing along +Y.
+        /// </summary>
+        public IReadOnlyList<Mesh> BlockArrows => _blockArrows;
+
+        /// <summary>Shared material of the arrow decals; not tinted.</summary>
+        public Material BlockArrowMaterial => _blockArrowMaterial;
+
+        /// <summary>Shared translucent material of the shell around an ice block.</summary>
+        public Material IceMaterial => _iceMaterial;
 
         /// <summary>Flat quad (facing -Z as modelled) drawn under a held block.</summary>
         public Mesh ShadowMesh => _shadowMesh;

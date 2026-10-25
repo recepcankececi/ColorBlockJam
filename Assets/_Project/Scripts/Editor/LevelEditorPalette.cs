@@ -7,7 +7,8 @@ using UnityEngine;
 namespace CBJ.Editor
 {
     /// <summary>
-    /// The level editor's tool panel: tool choice, colour swatches, freehand or preset stamp, and per-tool hints.
+    /// The level editor's tool panel: tool choice, colour swatches, block kind, freehand or preset stamp, and per-tool
+    /// hints.
     /// </summary>
     public static class LevelEditorPalette
     {
@@ -16,7 +17,10 @@ namespace CBJ.Editor
         private const float ThumbnailPadding = 6f;
         private const float SelectionBorder = 3f;
 
+        private const int KindColumns = 3;
+
         private static readonly string[] ToolLabels = { "Block", "Door", "Erase" };
+        private static readonly string[] KindLabels = { "Normal", "Arrow H", "Arrow V", "Ice 1", "Ice 2", "Ice 3" };
         private static readonly Color SelectionColor = new Color(1f, 0.85f, 0.2f);
         private static readonly Color SelectedThumbnailBackground = new Color(0.25f, 0.25f, 0.28f);
         private static readonly int ThumbnailGridCells = LargestShapeSide();
@@ -40,6 +44,11 @@ namespace CBJ.Editor
             EditorGUILayout.Space();
             if (brush.Tool == LevelEditorTool.Block)
             {
+                EditorGUILayout.LabelField("Kind", EditorStyles.boldLabel);
+                brush.Kind = (BrushKind)GUILayout.SelectionGrid((int)brush.Kind, KindLabels, KindColumns, EditorStyles.miniButton);
+                EditorGUILayout.HelpBox(KindHint(brush.Kind), MessageType.None);
+
+                EditorGUILayout.Space();
                 EditorGUILayout.LabelField("Shape", EditorStyles.boldLabel);
                 if (GUILayout.Toggle(!brush.HasPreset, "Freehand", EditorStyles.miniButton) && brush.HasPreset)
                 {
@@ -56,6 +65,17 @@ namespace CBJ.Editor
             {
                 EditorGUILayout.HelpBox("Click or drag over the slots around the board to paint door cells. " +
                                         "Neighbouring cells of one colour form one door.", MessageType.None);
+            }
+        }
+
+        private static string KindHint(BrushKind kind)
+        {
+            switch (kind)
+            {
+                case BrushKind.ArrowHorizontal: return "Arrow block: slides and exits only left or right.";
+                case BrushKind.ArrowVertical: return "Arrow block: slides and exits only up or down.";
+                case BrushKind.Normal: return "Normal block: slides in every direction.";
+                default: return "Ice block: frozen until this many other blocks have left the board.";
             }
         }
 

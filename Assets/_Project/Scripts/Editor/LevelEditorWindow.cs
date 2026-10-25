@@ -457,7 +457,7 @@ namespace CBJ.Editor
             {
                 Vector2Int[] cells = _brush.PresetCells();
                 Vector2Int origin = LevelEditOperations.OriginForClick(cells, hit.Cell);
-                changed = LevelEditOperations.TryPlaceBlock(level, cells, origin, _brush.ColorId);
+                changed = LevelEditOperations.TryPlaceBlock(level, cells, origin, _brush.ColorId, _brush.Traits);
             }
             else if (_brush.Tool == LevelEditorTool.Door && hit.Kind == GridHitKind.DoorSlot)
             {
@@ -497,7 +497,7 @@ namespace CBJ.Editor
         private void FinishStroke()
         {
             Undo.RecordObject(_draft, PaintUndoName);
-            bool changed = LevelEditOperations.ApplyStroke(_draft.Level, _stroke.Cells, _stroke.ExtendIndex, _brush.ColorId, out int dropped);
+            bool changed = LevelEditOperations.ApplyStroke(_draft.Level, _stroke.Cells, _stroke.ExtendIndex, _brush.ColorId, _brush.Traits, out int dropped);
             _stroke.End();
             if (dropped > 0)
             {

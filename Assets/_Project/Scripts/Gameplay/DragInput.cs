@@ -1,3 +1,4 @@
+using System;
 using CBJ.Core;
 using CBJ.Data;
 using UnityEngine;
@@ -7,7 +8,8 @@ namespace CBJ.Gameplay
     /// <summary>
     /// Drags blocks with one pointer: the block under the press is lifted and its view follows the finger along one
     /// axis, as far as the model allows; <see cref="BlockDrag"/> steps the model cell by cell (ADR-002) and lets a
-    /// block that reaches its door leave on its own. Releasing settles the view back onto its model cell.
+    /// block that reaches its door leave on its own. Releasing settles the view back onto its model cell. After
+    /// <see cref="PickNext"/>, the next press picks a block instead of dragging it (the hammer booster).
     /// </summary>
     public sealed class DragInput : MonoBehaviour
     {
@@ -17,6 +19,7 @@ namespace CBJ.Gameplay
         private LevelSession _session;
         private BoardView _board;
         private BlockDrag _drag;
+        private Action<Block> _pick;
         private bool _wasPressed;
 
         /// <summary>Sets the input source and camera; call once before <see cref="Bind"/>.</summary>
@@ -42,7 +45,24 @@ namespace CBJ.Gameplay
             _session = null;
             _board = null;
             _drag = null;
+            _pick = null;
             _wasPressed = false;
+        }
+
+        /// <summary>
+        /// Hands the block under the next press to <paramref name="picked"/> instead of dragging it; null when the
+        /// press lands on an empty cell or off the board. Picking ends after that one press.
+        /// </summary>
+        public void PickNext(Action<Block> picked)
+        {
+            Drop();
+            _pick = picked;
+        }
+
+        /// <summary>Drops a pending <see cref="PickNext"/>.</summary>
+        public void CancelPick()
+        {
+            _pick = null;
         }
 
         private void Update()
@@ -62,7 +82,14 @@ namespace CBJ.Gameplay
                 return;
             }
 
-            if (!_board.TryRaycast(_camera.ScreenPointToRay(_pointer.Position), out Vector2 point))
+            bool onBoard = _board.TryRaycast(_camera.ScreenPointToRay(_pointer.Position), out Vector2 point);
+            if (began && _pick != null)
+            {
+                Pick(onBoard ? _session.Board.GetBlockAt(Vector2Int.FloorToInt(point)) : null);
+                return;
+            }
+
+            if (!onBoard)
             {
                 return;
             }
@@ -77,10 +104,11 @@ namespace CBJ.Gameplay
             }
         }
 
+        // A frozen ice block is not picked up: lifting it would suggest it can move.
         private void Grab(Vector2 point)
         {
             Block block = _session.Board.GetBlockAt(Vector2Int.FloorToInt(point));
-            if (block != null)
+            if (block != null && block.IceLayers == 0)
             {
                 _drag.Grab(block, point);
                 _board.Lift(block);
@@ -98,9 +126,16 @@ namespace CBJ.Gameplay
             }
         }
 
+        private void Pick(Block block)
+        {
+            Action<Block> picked = _pick;
+            _pick = null;
+            picked(block);
+        }
+
         private void Drop()
         {
-            if (_drag.Held != null)
+            if (_drag != null && _drag.Held != null)
             {
                 _board.Drop(_drag.Held);
                 _drag.Release();

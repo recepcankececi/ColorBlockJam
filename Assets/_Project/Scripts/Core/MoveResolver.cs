@@ -7,7 +7,8 @@ namespace CBJ.Core
     /// <summary>
     /// Movement rules for a board: blocks advance one cell per step and stop at walls and other blocks.
     /// A block pushed off an edge leaves through a door when the colours match, the block's span along the edge
-    /// fits inside the door, and nothing stands between any of its cells and the edge.
+    /// fits inside the door, and nothing stands between any of its cells and the edge. An ice block does not move while
+    /// it has layers left; an arrow block moves and exits only along its axis (ADR-008).
     /// </summary>
     public sealed class MoveResolver
     {
@@ -57,6 +58,11 @@ namespace CBJ.Core
             }
 
             door = null;
+            if (block.IceLayers > 0 || (block.Kind == BlockKind.Arrow && direction.ToAxis() != block.ArrowAxis))
+            {
+                return StepResult.Blocked;
+            }
+
             if (_board.CanOccupy(block, block.Origin + direction.ToOffset()))
             {
                 return StepResult.Moved;

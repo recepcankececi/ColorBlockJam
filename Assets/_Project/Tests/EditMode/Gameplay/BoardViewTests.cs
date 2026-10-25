@@ -124,13 +124,72 @@ namespace CBJ.Tests.EditMode.Gameplay
         }
 
         [Test]
-        public void Show_Block_TintsEveryPieceWithThePaletteColour()
+        public void Show_Block_TintsItsBlockMaterialWithThePaletteColour()
         {
             _view.Show(SampleLevel().BuildBoard());
 
             BlockView block = _root.GetComponentsInChildren<BlockView>().Single();
-            Color red = _palette.Get(Red).Color;
-            Assert.That(block.GetComponentsInChildren<MeshRenderer>().Max(r => TintDistance(r, red)), Is.LessThan(ColorTolerance));
+            Assert.That(TintDistance(block.GetComponent<MeshRenderer>(), _palette.Get(Red).Color, 0), Is.LessThan(ColorTolerance));
+        }
+
+        [Test]
+        public void Show_ArrowBlock_DrawsTheArrowAsASecondSubMeshWithItsOwnMaterial()
+        {
+            _view.Show(KindLevel(BlockTraits.Arrow(Axis.Horizontal)).BuildBoard());
+
+            MeshRenderer block = _root.GetComponentsInChildren<BlockView>().Single().GetComponent<MeshRenderer>();
+            Assert.That(
+                (block.GetComponent<MeshFilter>().sharedMesh.subMeshCount, block.sharedMaterials[1]),
+                Is.EqualTo((2, _skin.BlockArrowMaterial)));
+        }
+
+        [Test]
+        public void Show_ArrowBlock_LeavesTheArrowUntinted()
+        {
+            _view.Show(KindLevel(BlockTraits.Arrow(Axis.Vertical)).BuildBoard());
+
+            MeshRenderer block = _root.GetComponentsInChildren<BlockView>().Single().GetComponent<MeshRenderer>();
+            Assert.That(HasTint(block, 1), Is.False);
+        }
+
+        [Test]
+        public void Show_NormalBlock_HasOneSubMesh()
+        {
+            _view.Show(SampleLevel().BuildBoard());
+
+            MeshFilter block = _root.GetComponentsInChildren<BlockView>().Single().GetComponent<MeshFilter>();
+            Assert.That(block.sharedMesh.subMeshCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Show_IceBlock_ShowsTheIceShell()
+        {
+            _view.Show(KindLevel(BlockTraits.Ice(1)).BuildBoard());
+
+            Transform shell = _root.GetComponentsInChildren<BlockView>().Single().transform.Find("IceShell");
+            Assert.That(shell.gameObject.activeSelf, Is.True);
+        }
+
+        [Test]
+        public void Show_NormalBlockFromAPooledIceView_HidesTheIceShell()
+        {
+            _view.Show(KindLevel(BlockTraits.Ice(1)).BuildBoard());
+
+            _view.Show(SampleLevel().BuildBoard());
+
+            Transform shell = _root.GetComponentsInChildren<BlockView>().Single().transform.Find("IceShell");
+            Assert.That(shell.gameObject.activeSelf, Is.False);
+        }
+
+        [Test]
+        public void Show_PooledArrowViewReusedForNormalBlock_DropsTheArrowMaterial()
+        {
+            _view.Show(KindLevel(BlockTraits.Arrow(Axis.Horizontal)).BuildBoard());
+
+            _view.Show(SampleLevel().BuildBoard());
+
+            MeshRenderer block = _root.GetComponentsInChildren<BlockView>().Single().GetComponent<MeshRenderer>();
+            Assert.That(block.sharedMaterials.Length, Is.EqualTo(1));
         }
 
         [Test]
@@ -240,6 +299,30 @@ namespace CBJ.Tests.EditMode.Gameplay
             var block = new MaterialPropertyBlock();
             renderer.GetPropertyBlock(block);
             return Vector4.Distance(block.GetColor(BaseColorId), expected);
+        }
+
+        // Blocks tint only their first material, so the arrow decal keeps its own colour.
+        private static float TintDistance(Renderer renderer, Color expected, int materialIndex)
+        {
+            var block = new MaterialPropertyBlock();
+            renderer.GetPropertyBlock(block, materialIndex);
+            return Vector4.Distance(block.GetColor(BaseColorId), expected);
+        }
+
+        private static bool HasTint(Renderer renderer, int materialIndex)
+        {
+            var block = new MaterialPropertyBlock();
+            renderer.GetPropertyBlock(block, materialIndex);
+            return !block.isEmpty;
+        }
+
+        // 3×2 board, one red 3-cell bar of the given kind, a red door on the left edge.
+        private static LevelData KindLevel(BlockTraits traits)
+        {
+            var level = new LevelData(Width, Height, 30);
+            level.AddDoor(new DoorData(Direction.Left, 0, 1, Red));
+            level.AddBlock(new BlockData(TestShapes.Bar3.Cells, Vector2Int.zero, Red, traits));
+            return level;
         }
 
         // 4×2 board, a red L block, three one-cell blue doors side by side on the top edge (merged into one door).

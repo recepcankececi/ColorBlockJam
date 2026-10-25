@@ -59,6 +59,55 @@ namespace CBJ.Tests.EditMode.Core
             Assert.That(exit, Is.Not.AllocatingGCMemory());
         }
 
+        [Test]
+        public void Probe_ArrowOffItsAxis_DoesNotAllocate()
+        {
+            var arrow = new Block(TestShapes.Single, Red, Vector2Int.one, BlockTraits.Arrow(Axis.Horizontal));
+            var resolver = new MoveResolver(new BoardModel(3, 3, new Door[0], new[] { arrow }));
+            TestDelegate probeUp = () => resolver.Probe(arrow, Direction.Up);
+            probeUp();
+
+            Assert.That(probeUp, Is.Not.AllocatingGCMemory());
+        }
+
+        [Test]
+        public void TryStep_FrozenIce_DoesNotAllocate()
+        {
+            var ice = new Block(TestShapes.Single, Red, Vector2Int.one, BlockTraits.Ice(2));
+            var resolver = new MoveResolver(new BoardModel(3, 3, new Door[0], new[] { ice }));
+            TestDelegate step = () => resolver.TryStep(ice, Direction.Up);
+            step();
+
+            Assert.That(step, Is.Not.AllocatingGCMemory());
+        }
+
+        [Test]
+        public void TryStep_ExitThawingIceWithSubscriber_DoesNotAllocate()
+        {
+            (MoveResolver warmResolver, Block warmBlock) = CreateExitBoardWithIce();
+            warmResolver.TryStep(warmBlock, Direction.Left);
+            (MoveResolver resolver, Block block) = CreateExitBoardWithIce();
+            TestDelegate exit = () => resolver.TryStep(block, Direction.Left);
+
+            Assert.That(exit, Is.Not.AllocatingGCMemory());
+        }
+
+        // The exit board plus a one-cell ice block in the far corner, listened to for thaw events.
+        private static (MoveResolver, Block) CreateExitBoardWithIce()
+        {
+            var block = new Block(TestShapes.L, Red, Vector2Int.zero);
+            var ice = new Block(TestShapes.Single, Red, new Vector2Int(2, 2), BlockTraits.Ice(2));
+            var door = new Door(Direction.Left, 0, 2, Red);
+            var board = new BoardModel(3, 3, new[] { door }, new[] { block, ice });
+            board.BlockExited += IgnoreExit;
+            board.IceLayerRemoved += IgnoreThaw;
+            return (new MoveResolver(board), block);
+        }
+
+        private static void IgnoreThaw(Block block, int remaining)
+        {
+        }
+
         // L at (0,0) on a 3×3 board with a matching door on the left edge; every event has a subscriber.
         private static (MoveResolver, Block) CreateExitBoard()
         {

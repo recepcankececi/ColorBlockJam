@@ -6,8 +6,10 @@ namespace CBJ.Core
 {
     /// <summary>
     /// Static checks on a <see cref="LevelData"/> before it is saved or played (O1). Errors are data
-    /// <see cref="LevelData.BuildBoard"/> would reject; warnings are levels that build but cannot be won, such as a
-    /// block with no door of its colour wide enough to leave through. Solvability beyond that is not searched.
+    /// <see cref="LevelData.BuildBoard"/> would reject or the editor never writes (an unknown block kind, ice layers
+    /// outside 1 to <see cref="BlockTraits.MaxIceLayers"/>); warnings are levels that build but cannot be won, such as
+    /// a block with no door of its colour wide enough to leave through, an arrow block with no such door on its axis,
+    /// or an ice block that runs out of other blocks to thaw it. Solvability beyond that is not searched.
     /// </summary>
     public static class LevelValidator
     {
@@ -41,6 +43,7 @@ namespace CBJ.Core
             if (doorsValid && blocksValid)
             {
                 CheckExits(level, issues);
+                CheckThaw(level, issues);
             }
 
             return issues;
@@ -122,6 +125,8 @@ namespace CBJ.Core
                     issues.Add(Error($"Block {i + 1} stores cells away from its origin; the game would place it elsewhere."));
                 }
 
+                CheckKind(blocks[i].Traits, i, issues);
+
                 bool reportedOverlap = false;
                 bool reportedOutside = false;
                 for (int c = 0; c < cells.Count; c++)
@@ -153,25 +158,82 @@ namespace CBJ.Core
             return issues.Count == before;
         }
 
-        // A block leaves through a door only when its whole width along that edge fits the door's span (ADR-002).
+        private static void CheckKind(BlockTraits traits, int index, List<LevelIssue> issues)
+        {
+            if (!Enum.IsDefined(typeof(BlockKind), traits.Kind))
+            {
+                issues.Add(Error($"Block {index + 1} has an unknown kind ({(int)traits.Kind})."));
+            }
+            else if (traits.Kind == BlockKind.Arrow && !Enum.IsDefined(typeof(Axis), traits.ArrowAxis))
+            {
+                issues.Add(Error($"Arrow block {index + 1} has an unknown axis ({(int)traits.ArrowAxis})."));
+            }
+            else if (traits.Kind == BlockKind.Ice && (traits.IceLayers < 1 || traits.IceLayers > BlockTraits.MaxIceLayers))
+            {
+                issues.Add(Error($"Ice block {index + 1} has {traits.IceLayers} layers; it needs 1 to {BlockTraits.MaxIceLayers}."));
+            }
+        }
+
+        // A block leaves through a door only when its whole width along that edge fits the door's span (ADR-002); an
+        // arrow block can only use the two edges of its axis (ADR-008).
         private static void CheckExits(LevelData level, List<LevelIssue> issues)
         {
             Door[] doors = level.MergeDoors();
             IReadOnlyList<BlockData> blocks = level.Blocks;
             for (int i = 0; i < blocks.Count; i++)
             {
+                BlockTraits traits = blocks[i].Traits;
+                bool arrow = traits.Kind == BlockKind.Arrow;
                 Vector2Int size = blocks[i].Size;
                 bool canExit = false;
                 for (int d = 0; d < doors.Length && !canExit; d++)
                 {
-                    int needed = doors[d].Edge.IsVertical() ? size.x : size.y;
-                    canExit = doors[d].ColorId == blocks[i].ColorId && doors[d].Length >= needed;
+                    bool vertical = doors[d].Edge.IsVertical();
+                    int needed = vertical ? size.x : size.y;
+                    canExit = doors[d].ColorId == blocks[i].ColorId && doors[d].Length >= needed &&
+                              (!arrow || doors[d].Edge.ToAxis() == traits.ArrowAxis);
                 }
 
-                if (!canExit)
+                if (!canExit && arrow)
+                {
+                    issues.Add(Warning(traits.ArrowAxis == Axis.Vertical
+                        ? $"Arrow block {i + 1} has no door of its colour {size.x} cells wide on the top or bottom edge."
+                        : $"Arrow block {i + 1} has no door of its colour {size.y} cells wide on the left or right edge."));
+                }
+                else if (!canExit)
                 {
                     issues.Add(Warning($"Block {i + 1} has no door of its colour wide enough to exit " +
                                        $"({size.x} cells on the top or bottom edge, {size.y} on the left or right)."));
+                }
+            }
+        }
+
+        // Only blocks that can move thaw ice, and a frozen block cannot move: assume every non-ice block leaves, then
+        // the ice blocks leave in order of their layers. The ice block at position i in that order has the non-ice
+        // blocks and the i ice blocks before it to thaw it; from the first one that runs short, none can thaw.
+        private static void CheckThaw(LevelData level, List<LevelIssue> issues)
+        {
+            IReadOnlyList<BlockData> blocks = level.Blocks;
+            var ice = new List<int>();
+            for (int i = 0; i < blocks.Count; i++)
+            {
+                if (blocks[i].Traits.Kind == BlockKind.Ice)
+                {
+                    ice.Add(i);
+                }
+            }
+
+            ice.Sort((a, b) => blocks[a].Traits.IceLayers.CompareTo(blocks[b].Traits.IceLayers));
+            int thawers = blocks.Count - ice.Count;
+            bool stuck = false;
+            for (int order = 0; order < ice.Count; order++)
+            {
+                int index = ice[order];
+                stuck |= blocks[index].Traits.IceLayers > thawers + order;
+                if (stuck)
+                {
+                    issues.Add(Warning($"Ice block {index + 1} can never thaw: it has {blocks[index].Traits.IceLayers} " +
+                                       "layers but not enough other blocks can leave before it."));
                 }
             }
         }

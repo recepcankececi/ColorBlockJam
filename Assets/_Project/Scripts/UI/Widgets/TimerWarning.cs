@@ -5,7 +5,8 @@ namespace CBJ.UI
 {
     /// <summary>
     /// Low-time warning on the HUD timer: below the threshold the holder turns red and pulses with its text. The
-    /// pulse runs only while the attempt runs, so it stops on pause and fail.
+    /// pulse runs only while the attempt runs, so it stops on pause and fail. While a freeze stops the countdown the
+    /// holder and its text turn blue instead and do not pulse.
     /// </summary>
     public sealed class TimerWarning : MonoBehaviour
     {
@@ -15,6 +16,12 @@ namespace CBJ.UI
         [Tooltip("Tint of the holder while warning.")]
         [SerializeField] private Color _warningColor = new Color(1f, 0.25f, 0.25f, 1f);
 
+        [Tooltip("Tint of the holder while a freeze stops the countdown.")]
+        [SerializeField] private Color _frozenColor = new Color(0.45f, 0.75f, 1f, 1f);
+
+        [Tooltip("Colour of the countdown text while a freeze stops it.")]
+        [SerializeField] private Color _frozenLabelColor = new Color(0.55f, 0.9f, 1f, 1f);
+
         [Tooltip("Largest scale of the pulse; it swings between 1 and this.")]
         [SerializeField, Range(1f, 1.3f)] private float _pulseScale = 1.08f;
 
@@ -22,10 +29,14 @@ namespace CBJ.UI
         [SerializeField, Min(0.1f)] private float _pulseFrequency = 1f;
 
         [SerializeField] private Image _holder;
+        [SerializeField] private Text _label;
 
         private Color _restColor;
+        private Color _restLabelColor;
+        private bool _hasRestColor;
         private bool _warning;
         private bool _running;
+        private bool _frozen;
         private float _phase;
 
         /// <summary>True when <paramref name="seconds"/> left is below <paramref name="thresholdSeconds"/>.</summary>
@@ -52,7 +63,13 @@ namespace CBJ.UI
 
             _warning = warning;
             _phase = 0f;
-            _holder.color = warning ? _warningColor : _restColor;
+            Refresh();
+        }
+
+        /// <summary>Shows or clears the freeze tint.</summary>
+        public void SetFrozen(bool frozen)
+        {
+            _frozen = frozen;
             Refresh();
         }
 
@@ -65,7 +82,7 @@ namespace CBJ.UI
 
         private void Awake()
         {
-            _restColor = _holder.color;
+            CaptureRestColor();
             enabled = false;
         }
 
@@ -77,10 +94,24 @@ namespace CBJ.UI
 
         private void Refresh()
         {
-            enabled = _warning && _running;
+            CaptureRestColor();
+            _holder.color = _frozen ? _frozenColor : _warning ? _warningColor : _restColor;
+            _label.color = _frozen ? _frozenLabelColor : _restLabelColor;
+            enabled = _warning && _running && !_frozen;
             if (!enabled)
             {
                 SetScale(1f);
+            }
+        }
+
+        // The HUD may report state before this component's Awake runs, so the authored tint is read on first use.
+        private void CaptureRestColor()
+        {
+            if (!_hasRestColor)
+            {
+                _restColor = _holder.color;
+                _restLabelColor = _label.color;
+                _hasRestColor = true;
             }
         }
 

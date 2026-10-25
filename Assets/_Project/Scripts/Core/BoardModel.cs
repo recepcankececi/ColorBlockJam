@@ -7,7 +7,9 @@ namespace CBJ.Core
     /// <summary>
     /// State of one level attempt: cell occupancy, edge doors and the blocks still on the board.
     /// Cell (0,0) is bottom-left; x grows right, y grows up. Changed only through <see cref="MoveResolver"/>;
-    /// a restart builds a fresh board from fresh blocks. Event handlers must not move blocks themselves.
+    /// and <see cref="Destroy"/>; a restart builds a fresh board from fresh blocks. Event handlers must not move or
+    /// destroy blocks themselves. Every block that leaves the board, through a door or destroyed, thaws one layer off
+    /// each ice block still on it (ADR-008).
     /// A board built without blocks starts cleared and never raises <see cref="Cleared"/>.
     /// </summary>
     public sealed class BoardModel
@@ -88,7 +90,13 @@ namespace CBJ.Core
         /// <summary>Raised after a block left the board through the given door.</summary>
         public event Action<Block, Door> BlockExited;
 
-        /// <summary>Raised once, when the last block has exited.</summary>
+        /// <summary>Raised after a block was destroyed without a door (<see cref="Destroy"/>).</summary>
+        public event Action<Block> BlockDestroyed;
+
+        /// <summary>Raised after an ice block lost a layer: block, layers left.</summary>
+        public event Action<Block, int> IceLayerRemoved;
+
+        /// <summary>Raised once, when the last block has left the board.</summary>
         public event Action Cleared;
 
         /// <summary>Board width in cells.</summary>
@@ -103,10 +111,10 @@ namespace CBJ.Core
         /// <summary>All blocks, including exited ones, in the order given.</summary>
         public IReadOnlyList<Block> Blocks => _blocks;
 
-        /// <summary>Number of blocks that have not exited yet.</summary>
+        /// <summary>Number of blocks still on the board.</summary>
         public int RemainingBlocks { get; private set; }
 
-        /// <summary>True when every block has exited.</summary>
+        /// <summary>True when every block has left the board.</summary>
         public bool IsCleared => RemainingBlocks == 0;
 
         /// <summary>True when <paramref name="cell"/> lies on the board.</summary>
@@ -166,12 +174,53 @@ namespace CBJ.Core
             BlockMoved?.Invoke(block, from, origin);
         }
 
+        /// <summary>
+        /// Removes <paramref name="block"/> from the board without a door (the hammer booster). It counts as cleared
+        /// like an exit and thaws the ice blocks left behind.
+        /// </summary>
+        public void Destroy(Block block)
+        {
+            if (block == null)
+            {
+                throw new ArgumentNullException(nameof(block));
+            }
+
+            if (block.Board != this || block.IsExited)
+            {
+                throw new ArgumentException("The block is not on this board.", nameof(block));
+            }
+
+            TakeOff(block);
+            BlockDestroyed?.Invoke(block);
+            ThawAndCheckCleared();
+        }
+
         internal void Remove(Block block, Door door)
+        {
+            TakeOff(block);
+            BlockExited?.Invoke(block, door);
+            ThawAndCheckCleared();
+        }
+
+        private void TakeOff(Block block)
         {
             SetCells(block, block.Origin, null);
             block.IsExited = true;
             RemainingBlocks--;
-            BlockExited?.Invoke(block, door);
+        }
+
+        private void ThawAndCheckCleared()
+        {
+            for (int i = 0; i < _blocks.Length; i++)
+            {
+                Block block = _blocks[i];
+                if (!block.IsExited && block.IceLayers > 0)
+                {
+                    block.IceLayers--;
+                    IceLayerRemoved?.Invoke(block, block.IceLayers);
+                }
+            }
+
             if (RemainingBlocks == 0)
             {
                 Cleared?.Invoke();

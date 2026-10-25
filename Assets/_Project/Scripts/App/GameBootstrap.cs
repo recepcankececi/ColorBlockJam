@@ -40,7 +40,7 @@ namespace CBJ.App
             _boardCamera.Initialize(_config);
             _dragInput.Initialize(new UIBlockedPointerSource(new LegacyPointerSource(), _uiHitTest),
                 _boardCamera.Camera, _config);
-            _levelPlayer.Initialize(_boardView, _boardCamera, _dragInput);
+            _levelPlayer.Initialize(_boardView, _boardCamera, _dragInput, _config);
             _save = new SaveService(new PlayerPrefsStore());
             _settings = new GameSettings();
             _save.LoadSettings(_settings);

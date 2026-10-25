@@ -3,8 +3,8 @@ using UnityEngine;
 namespace CBJ.Data
 {
     /// <summary>
-    /// Gameplay and presentation tunables: drag feel, block and door animation, camera framing, the pause after a win
-    /// and the coin reward.
+    /// Gameplay and presentation tunables: drag feel, block and door animation, block kinds, boosters, camera framing,
+    /// the pause after a win and the coin reward.
     /// </summary>
     [CreateAssetMenu(fileName = "GameConfig", menuName = "Color Block Jam/Game Config")]
     public sealed class GameConfig : ScriptableObject
@@ -34,6 +34,23 @@ namespace CBJ.Data
 
         [Tooltip("Seconds a door takes to sink into the board when a block leaves through it (and to rise again).")]
         [SerializeField, Min(0.01f)] private float _doorSinkDuration = 0.15f;
+
+        [Header("Block kinds")]
+        [Tooltip("Scale of the ice shell around an ice block relative to the block.")]
+        [SerializeField, Range(1f, 1.2f)] private float _iceScale = 1.03f;
+
+        [Tooltip("Seconds the ice shell takes to shrink away when its last layer thaws.")]
+        [SerializeField, Min(0.01f)] private float _iceThawDuration = 0.2f;
+
+        [Tooltip("World units the arrow decal of an arrow block sinks into the block's top face.")]
+        [SerializeField, Min(0f)] private float _arrowSink = 0.3f;
+
+        [Header("Boosters")]
+        [Tooltip("Hammer and freeze uses the player gets in every attempt.")]
+        [SerializeField, Min(0)] private int _boosterUsesPerAttempt = 1;
+
+        [Tooltip("Seconds the freeze booster stops the countdown.")]
+        [SerializeField, Min(0f)] private float _freezeSeconds = 10f;
 
         [Header("Camera")]
         [Tooltip("Downward tilt of the board camera in degrees; 90 looks straight down.")]
@@ -82,6 +99,21 @@ namespace CBJ.Data
 
         /// <summary>Seconds a door takes to sink when a block leaves through it, and to rise again.</summary>
         public float DoorSinkDuration => _doorSinkDuration;
+
+        /// <summary>Scale of the ice shell around an ice block.</summary>
+        public float IceScale => _iceScale;
+
+        /// <summary>Seconds the ice shell takes to shrink away.</summary>
+        public float IceThawDuration => _iceThawDuration;
+
+        /// <summary>World units an arrow decal sinks into its block's top face.</summary>
+        public float ArrowSink => _arrowSink;
+
+        /// <summary>Hammer and freeze uses per attempt.</summary>
+        public int BoosterUsesPerAttempt => _boosterUsesPerAttempt;
+
+        /// <summary>Seconds the freeze booster stops the countdown.</summary>
+        public float FreezeSeconds => _freezeSeconds;
 
         /// <summary>Downward tilt of the board camera in degrees.</summary>
         public float CameraPitch => _cameraPitch;

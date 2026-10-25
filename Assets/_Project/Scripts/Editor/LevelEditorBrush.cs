@@ -1,4 +1,5 @@
 using System;
+using CBJ.Core;
 using UnityEngine;
 
 namespace CBJ.Editor
@@ -13,6 +14,7 @@ namespace CBJ.Editor
         [SerializeField] private string _presetId = string.Empty;
         [SerializeField] private int _quarterTurns;
         [SerializeField] private int _colorId;
+        [SerializeField] private BrushKind _kind;
 
         /// <summary>Active tool.</summary>
         public LevelEditorTool Tool
@@ -43,6 +45,30 @@ namespace CBJ.Editor
         {
             get => _colorId;
             set => _colorId = value;
+        }
+
+        /// <summary>Kind of placed blocks.</summary>
+        public BrushKind Kind
+        {
+            get => _kind;
+            set => _kind = value;
+        }
+
+        /// <summary>The model traits of <see cref="Kind"/>.</summary>
+        public BlockTraits Traits
+        {
+            get
+            {
+                switch (_kind)
+                {
+                    case BrushKind.ArrowHorizontal: return BlockTraits.Arrow(Axis.Horizontal);
+                    case BrushKind.ArrowVertical: return BlockTraits.Arrow(Axis.Vertical);
+                    case BrushKind.Ice1: return BlockTraits.Ice(1);
+                    case BrushKind.Ice2: return BlockTraits.Ice(2);
+                    case BrushKind.Ice3: return BlockTraits.Ice(3);
+                    default: return BlockTraits.Normal;
+                }
+            }
         }
 
         /// <summary>Cells of the preset after rotation; only valid while <see cref="HasPreset"/>.</summary>

@@ -48,15 +48,16 @@ namespace CBJ.Editor
             return true;
         }
 
-        /// <summary>Adds a block when it fits; returns whether it was added.</summary>
-        public static bool TryPlaceBlock(LevelData level, IReadOnlyList<Vector2Int> cells, Vector2Int origin, int colorId)
+        /// <summary>Adds a block of the given kind when it fits; returns whether it was added.</summary>
+        public static bool TryPlaceBlock(LevelData level, IReadOnlyList<Vector2Int> cells, Vector2Int origin, int colorId,
+            BlockTraits traits = default)
         {
             if (!CanPlaceBlock(level, cells, origin))
             {
                 return false;
             }
 
-            level.AddBlock(new BlockData(cells, origin, colorId));
+            level.AddBlock(new BlockData(cells, origin, colorId, traits));
             return true;
         }
 
@@ -96,11 +97,19 @@ namespace CBJ.Editor
             return grown;
         }
 
-        /// <summary>
-        /// Applies a finished stroke: paints a new block of <paramref name="colorId"/>, or grows the block named by
-        /// <paramref name="extendIndex"/> (it keeps its colour). Returns whether the level changed.
-        /// </summary>
+        /// <summary>Like the other overload, painting a normal block.</summary>
         public static bool ApplyStroke(LevelData level, IReadOnlyList<Vector2Int> stroke, int extendIndex, int colorId, out int dropped)
+        {
+            return ApplyStroke(level, stroke, extendIndex, colorId, BlockTraits.Normal, out dropped);
+        }
+
+        /// <summary>
+        /// Applies a finished stroke: paints a new block of <paramref name="colorId"/> and kind
+        /// <paramref name="traits"/>, or grows the block named by <paramref name="extendIndex"/> (it keeps its colour
+        /// and kind). Returns whether the level changed.
+        /// </summary>
+        public static bool ApplyStroke(LevelData level, IReadOnlyList<Vector2Int> stroke, int extendIndex, int colorId,
+            BlockTraits traits, out int dropped)
         {
             List<Vector2Int> cells = StrokeBlockCells(level, stroke, extendIndex, out dropped);
             if (extendIndex < 0)
@@ -110,7 +119,7 @@ namespace CBJ.Editor
                     return false;
                 }
 
-                level.AddBlock(new BlockData(cells, Vector2Int.zero, colorId));
+                level.AddBlock(new BlockData(cells, Vector2Int.zero, colorId, traits));
                 return true;
             }
 
@@ -120,7 +129,7 @@ namespace CBJ.Editor
                 return false;
             }
 
-            level.ReplaceBlockAt(extendIndex, new BlockData(cells, Vector2Int.zero, block.ColorId));
+            level.ReplaceBlockAt(extendIndex, new BlockData(cells, Vector2Int.zero, block.ColorId, block.Traits));
             return true;
         }
 

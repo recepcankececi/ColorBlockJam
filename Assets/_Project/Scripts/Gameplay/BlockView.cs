@@ -7,14 +7,20 @@ namespace CBJ.Gameplay
     /// <summary>
     /// Draws one <see cref="CBJ.Core.Block"/> as a single merged mesh. While held it lifts, casts a shadow and follows
     /// the drag offset on top of its model cell; released, it eases back onto the cell and drops; exiting, it slides
-    /// out and shrinks away. The view keeps its mesh while pooled and refills it for the next block. Idle views are
+    /// out and shrinks away. An ice block wears a translucent shell, a slightly larger copy of its mesh, that shrinks
+    /// away when the ice thaws. The view keeps its mesh while pooled and refills it for the next block. Idle views are
     /// disabled, so only animating or held blocks run an update.
     /// </summary>
     public sealed class BlockView : MonoBehaviour
     {
         private Mesh _mesh;
         private MeshRenderer _renderer;
+        private Transform _ice;
+        private Material[] _plainMaterials;
+        private Material[] _decalMaterials;
         private GameConfig _config;
+        private float _thaw;
+        private bool _thawing;
         private Vector3 _cell;
         private Vector3 _offset;
         private Vector3 _pivot;
@@ -36,13 +42,41 @@ namespace CBJ.Gameplay
 
         internal MeshRenderer Renderer => _renderer;
 
-        internal void Initialize(Material material, GameConfig config)
+        internal void Initialize(Material material, Material decalMaterial, Material iceMaterial, GameConfig config)
         {
             _config = config;
             _mesh = new Mesh { name = "BlockMesh" };
             gameObject.AddComponent<MeshFilter>().sharedMesh = _mesh;
             _renderer = gameObject.AddComponent<MeshRenderer>();
-            _renderer.sharedMaterial = material;
+            _plainMaterials = new[] { material };
+            _decalMaterials = new[] { material, decalMaterial };
+            _renderer.sharedMaterials = _plainMaterials;
+
+            var ice = new GameObject("IceShell");
+            ice.SetActive(false);
+            _ice = ice.transform;
+            _ice.SetParent(transform, false);
+            ice.AddComponent<MeshFilter>().sharedMesh = _mesh;
+            ice.AddComponent<MeshRenderer>().sharedMaterial = iceMaterial;
+        }
+
+        // Call after the mesh is written: a decal block draws its second sub-mesh with the decal material.
+        internal void SetKind(bool decal, bool iced)
+        {
+            _renderer.sharedMaterials = decal ? _decalMaterials : _plainMaterials;
+            _thawing = false;
+            _ice.gameObject.SetActive(iced);
+            ScaleIce(_config.IceScale);
+        }
+
+        internal void Thaw()
+        {
+            if (_ice.gameObject.activeSelf && !_thawing)
+            {
+                _thawing = true;
+                _thaw = 0f;
+                enabled = true;
+            }
         }
 
         // The pivot is the footprint centre on the floor; lift and exit scale around it.
@@ -115,7 +149,10 @@ namespace CBJ.Gameplay
         internal void ResetForPool()
         {
             _mesh.Clear();
-            _renderer.SetPropertyBlock(null);
+            _renderer.SetPropertyBlock(null, 0);
+            _renderer.sharedMaterials = _plainMaterials;
+            _ice.gameObject.SetActive(false);
+            _thawing = false;
             _shadow = null;
             _dropped = null;
             _exitFinished = null;
@@ -134,6 +171,17 @@ namespace CBJ.Gameplay
         private void LateUpdate()
         {
             float deltaTime = Time.deltaTime;
+            if (_thawing)
+            {
+                _thaw = Mathf.MoveTowards(_thaw, 1f, deltaTime / _config.IceThawDuration);
+                ScaleIce(Mathf.LerpUnclamped(_config.IceScale, 0f, Ease.InQuad(_thaw)));
+                if (_thaw >= 1f)
+                {
+                    _thawing = false;
+                    _ice.gameObject.SetActive(false);
+                }
+            }
+
             float easedLift = Ease.OutCubic(_lift);
             float liftScale = 1f + (_config.LiftScale - 1f) * easedLift;
             if (_exiting)
@@ -167,7 +215,7 @@ namespace CBJ.Gameplay
                 _shadow.localScale = _shadowScale * easedLift;
             }
 
-            if (!_held && _lift <= 0f && _settle >= 1f)
+            if (!_held && !_thawing && _lift <= 0f && _settle >= 1f)
             {
                 enabled = false;
                 _dropped?.Invoke(this);
@@ -178,6 +226,13 @@ namespace CBJ.Gameplay
         {
             _settleFrom = _offset;
             _settle = 0f;
+        }
+
+        // The shell scales around the footprint centre like the block, so it wraps the block evenly.
+        private void ScaleIce(float scale)
+        {
+            _ice.localPosition = _pivot * (1f - scale);
+            _ice.localScale = new Vector3(scale, scale, scale);
         }
 
         // Scales around the footprint centre on the floor, so a lifted or exiting block grows and shrinks in place.

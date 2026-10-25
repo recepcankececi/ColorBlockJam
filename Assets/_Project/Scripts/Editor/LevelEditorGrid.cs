@@ -1,14 +1,16 @@
 using System.Collections.Generic;
 using CBJ.Core;
 using CBJ.Data;
+using CBJ.Gameplay;
 using UnityEditor;
 using UnityEngine;
 
 namespace CBJ.Editor
 {
     /// <summary>
-    /// Draws a level as the designer sees it — board cells, blocks in their colours, doors in the edge slots —
-    /// and maps mouse positions back to cells and slots. Board row 0 is drawn at the bottom, as in the game.
+    /// Draws a level as the designer sees it — board cells, blocks in their colours with arrows on arrow blocks and
+    /// hatching plus a layer count on ice blocks, doors in the edge slots — and maps mouse positions back to cells and
+    /// slots. Board row 0 is drawn at the bottom, as in the game.
     /// </summary>
     public sealed class LevelEditorGrid
     {
@@ -18,6 +20,11 @@ namespace CBJ.Editor
         private const float DoorThickness = 0.45f;
         private const float WallThickness = 0.12f;
         private const float OutlineWidth = 2f;
+        private const float ArrowThickness = 0.14f;
+        private const float ArrowHeadLength = 0.3f;
+        private const float ArrowHeadWidth = 0.22f;
+        private const float ArrowEndInset = 0.18f;
+        private const int HatchLinesPerCell = 4;
 
         private static readonly Color BoardColor = new Color(0.17f, 0.17f, 0.20f);
         private static readonly Color CellColor = new Color(0.30f, 0.30f, 0.34f);
@@ -26,7 +33,12 @@ namespace CBJ.Editor
         private static readonly Color InvalidPreview = new Color(1f, 0.15f, 0.15f, 0.45f);
         private static readonly Color EraseHighlight = new Color(1f, 1f, 1f, 0.9f);
         private static readonly Color MissingColor = Color.magenta;
+        private static readonly Color ArrowColor = new Color(1f, 1f, 1f, 0.95f);
+        private static readonly Color HatchColor = new Color(0.85f, 0.95f, 1f, 0.8f);
         private static readonly Vector2Int[] SingleCell = { Vector2Int.zero };
+
+        private readonly Vector3[] _triangle = new Vector3[3];
+        private GUIStyle _layerStyle;
 
         private Vector2 _boardTopLeft;
         private float _cell;
@@ -102,6 +114,7 @@ namespace CBJ.Editor
             for (int i = 0; i < blocks.Count; i++)
             {
                 DrawBlock(blocks[i], ColorOf(palette, blocks[i].ColorId));
+                DrawKind(blocks[i]);
             }
 
             IReadOnlyList<DoorData> doors = level.Doors;
@@ -147,6 +160,82 @@ namespace CBJ.Editor
                     EditorGUI.DrawRect(new Rect(rect.x, rect.y - CellGap * 2f, rect.width, CellGap * 2f), color);
                 }
             }
+        }
+
+        private void DrawKind(BlockData block)
+        {
+            BlockTraits traits = block.Traits;
+            if (block.Cells.Count == 0 || traits.Kind == BlockKind.Normal)
+            {
+                return;
+            }
+
+            if (traits.Kind == BlockKind.Arrow)
+            {
+                ArrowPlacement.Find(new BlockShape(block.Cells), traits.ArrowAxis, out Vector2 center, out int length);
+                DrawArrow(block.Origin + center, traits.ArrowAxis, length);
+                return;
+            }
+
+            IReadOnlyList<Vector2Int> cells = block.Cells;
+            for (int i = 0; i < cells.Count; i++)
+            {
+                DrawHatch(Inset(CellRect(block.Origin + cells[i])));
+            }
+
+            if (_layerStyle == null)
+            {
+                _layerStyle = new GUIStyle(EditorStyles.boldLabel) { alignment = TextAnchor.MiddleCenter };
+                _layerStyle.normal.textColor = Color.white;
+            }
+
+            _layerStyle.fontSize = Mathf.RoundToInt(_cell * 0.5f);
+            GUI.Label(CellRect(block.Origin + cells[0]), traits.IceLayers.ToString(), _layerStyle);
+        }
+
+        // Double-headed like the in-game decal: a bar along the axis with a head at each end.
+        private void DrawArrow(Vector2 cellCenter, Axis axis, int length)
+        {
+            Vector2 center = ToGui(cellCenter);
+            Vector2 along = axis == Axis.Horizontal ? Vector2.right : Vector2.down;
+            Vector2 across = new Vector2(-along.y, along.x);
+            float half = (length * 0.5f - ArrowEndInset) * _cell;
+            float head = ArrowHeadLength * _cell;
+            float barHalf = Mathf.Max(0f, half - head);
+            float thickness = ArrowThickness * _cell;
+            Vector2 barSize = axis == Axis.Horizontal ? new Vector2(barHalf * 2f, thickness) : new Vector2(thickness, barHalf * 2f);
+            EditorGUI.DrawRect(new Rect(center - barSize * 0.5f, barSize), ArrowColor);
+
+            Handles.color = ArrowColor;
+            for (int sign = -1; sign <= 1; sign += 2)
+            {
+                Vector2 tip = center + along * (half * sign);
+                Vector2 baseCenter = tip - along * (head * sign);
+                _triangle[0] = tip;
+                _triangle[1] = baseCenter + across * (ArrowHeadWidth * _cell);
+                _triangle[2] = baseCenter - across * (ArrowHeadWidth * _cell);
+                Handles.DrawAAConvexPolygon(_triangle);
+            }
+        }
+
+        // Diagonal lines across the cell, each clipped to it: points where (x - left) + (y - top) is constant.
+        private static void DrawHatch(Rect rect)
+        {
+            float side = rect.width;
+            float step = side * 2f / (HatchLinesPerCell + 1);
+            Handles.color = HatchColor;
+            for (int i = 1; i <= HatchLinesPerCell; i++)
+            {
+                float sum = step * i;
+                var from = new Vector3(rect.x + Mathf.Min(sum, side), rect.y + Mathf.Max(0f, sum - side));
+                var to = new Vector3(rect.x + Mathf.Max(0f, sum - side), rect.y + Mathf.Min(sum, side));
+                Handles.DrawLine(from, to);
+            }
+        }
+
+        private Vector2 ToGui(Vector2 cellPoint)
+        {
+            return new Vector2(_boardTopLeft.x + cellPoint.x * _cell, _boardTopLeft.y + (_height - cellPoint.y) * _cell);
         }
 
         // Doors are painted one cell at a time; the gap to a same-colour neighbour is bridged so they read as one opening.

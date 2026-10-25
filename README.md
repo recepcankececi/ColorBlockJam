@@ -14,7 +14,8 @@ No third-party packages; only the supplied art.
 2. Open `Assets/_Project/Scenes/Boot.unity` — the only scene. Screens and popups are children of its canvas.
 3. Set the Game view to **1080x1920** (or a 20:9 size such as 1080x2400) and press Play.
 4. Drag a block with the mouse (or one finger on device). A block leaves through a door of its colour that is
-   wide enough for it. Clear the board before the timer runs out.
+   wide enough for it. Clear the board before the timer runs out. The *Hammer* booster breaks one block you tap;
+   *Freeze* stops the timer for 10 seconds (one use each per attempt).
 
 Build: **Tools > Build > Android** writes `Builds/Android/ColorBlockJam.apk` (IL2CPP, ARM64, portrait). Headless:
 `Unity -batchmode -projectPath . -buildTarget Android -executeMethod CBJ.Editor.BuildScript.BuildAndroid`.
@@ -31,6 +32,8 @@ Tests: **Window > General > Test Runner > EditMode > Run All**.
 3. Set **Width**, **Height** and **Timer (seconds)** with the sliders.
 4. **Blocks:** choose the *Block* tool and a colour, then drag over cells — one drag is one block. *Shift+drag*
    from a block adds cells to it. Choose a preset under *Shape* to stamp it with a click; **R** rotates it.
+   *Kind* sets what new blocks are: Normal, Arrow H / Arrow V (slides only along that axis) or Ice 1–3 (frozen
+   until that many other blocks have left). The grid draws arrows and hatched ice with its layer count.
 5. **Doors:** choose the *Door* tool and a colour, then click or drag over the slots around the board. Neighbouring
    door cells of one colour form one door.
 6. **Fix mistakes:** right-click (or the *Erase* tool) removes a block or a door cell; **Ctrl+Z** undoes.
@@ -112,6 +115,21 @@ block renderers. The remaining non-batched draws are the 22 tinted door frames; 
 the SRP Batcher. Not measured on a device yet. Since then each merged door is drawn as one stretched frame with one
 arrow, so a door is one tinted renderer whatever its width.
 
+## Optional scope
+
+Implemented after the required scope was complete (ADR-008), with every rule in Core and covered by EditMode tests:
+
+- **O1 level validation** — static checks in the editor (see Decisions), including the two block kinds below.
+- **O3 ice blocks** — an ice block cannot move while it has layers (1–3). Every time another block leaves the
+  board, through a door or the hammer, each ice block loses one layer. Drawn as a translucent shell made from
+  `icetexture.jpg` that shrinks away when the last layer goes.
+- **O4 arrow blocks** — an arrow block slides and exits only along its axis. The arrow from `Arrows.fbx` sits on
+  the block's longest straight run and is merged into the block's mesh, so the block is still one renderer.
+- **O2 boosters, partly** — *Hammer* (tap it, then tap a block to destroy it; tap an empty cell or the hammer again
+  to cancel) and *Freeze* (stops the countdown for 10 seconds). One use of each per attempt, refilled on restart
+  and on a new level, not saved. *Vacuum* and *Rocket* stay locked placeholders: no rules were specified for them,
+  and a coin shop to refill boosters was left out to keep the scope small.
+
 ## Decisions on unclear requirements
 
 - **Blocks** are painted freely: one drag is one block, cells must be 4-connected (disconnected cells are dropped
@@ -133,8 +151,18 @@ arrow, so a door is one tinted renderer whatever its width.
 - **Validation** (optional O1) is static only: board size, timer, overlapping or out-of-range blocks and doors,
   and whether every block has a door of its colour wide enough. There is no solver. A level with errors cannot be
   saved or played from the editor; an empty level cannot be played.
-- **Blocks have no kind field**; ice and arrow blocks (O3/O4) are out of scope, so `Arrows.fbx` and the ice texture
-  are not imported.
+- **Block kinds** are stored on each block (`Kind`, `ArrowAxis`, `IceLayers`); levels saved before kinds existed
+  load as normal blocks. An arrow block must find its door on the two edges of its axis, or the editor warns.
+- **Optional scope:** the requirements list O2–O4 as out of scope; they were brought in once the required scope
+  was complete (see *Optional scope*).
+- **Ice "can never thaw"** assumes every non-ice block leaves and the ice blocks then leave in order of their
+  layers; an ice block warns when fewer blocks than its layers can leave before it. Equal is fine: with as many
+  layers as blocks before it, the ice thaws after the last of them and can still exit. Two ice blocks with nothing
+  else to thaw them both warn. A frozen ice block cannot be picked up.
+- **Hammer** counts a destroyed block as cleared (it can win the level) and thaws ice like an exit. A frozen ice
+  block can be hammered.
+- **Freeze** used during a freeze would extend it; with one use per attempt this does not happen in play. While
+  frozen the timer holder and its text turn blue and the low-time pulse stops.
 - **Input:** one pointer only — the first finger drags, a second finger is ignored and never takes over. A press
   that starts on UI never drags a block. A diagonal drag tries the dominant axis first, then the other one.
 - **Flow:** a win pays the coin reward, saves the next level and advances automatically after a short delay (no
@@ -145,13 +173,13 @@ arrow, so a door is one tinted renderer whatever its width.
   animation).
 - **HUD restart** works only while the attempt runs (not while paused, nor after a win, when the reward and the
   next level are already saved). The Pause and Fail popups keep their own restart.
-- **Boosters** are placeholders: the first shows a count badge, the other three are locked with an unlock level;
-  all give press feedback only.
+- **Boosters** respond only while the attempt runs (not while paused or after a win or fail); a spent booster greys
+  out with a 0 badge. Pausing, restarting or ending the attempt puts an armed hammer away.
 - **Low time:** under 10 seconds the timer turns red and pulses; the pulse stops on pause and fail.
 - **Saved progress** is a catalog index: if the catalog shrinks below it, progress restarts at level 1.
 - **Settings toggles** (vibration, sound, music) show a distinct on/off state and are saved; only an "On" sprite
   was supplied, so "Off" is the same art tinted grey with an "Off" label. The game has no audio or haptics.
-- **Placeholders** (tabs, boosters, profile, lives, other buttons) give press feedback only.
+- **Placeholders** (tabs, the Vacuum and Rocket boosters, profile, lives, other buttons) give press feedback only.
 - **Camera:** orthographic, pitched 60° (set in `GameConfig`), framed to the board between the HUD bands. 60–65°
   all fit every level at 9:16 and 20:9 (the fit is width-bound); 60° gives tall boards the most room. Supplied
   block pieces are 1-unit quadrants, so a cell is 2 world units; each door has one white arrow in its middle.
@@ -170,6 +198,9 @@ arrow, so a door is one tinted renderer whatever its width.
   the only checked path.
 - `BlockData.Cells` exposes its backing list (read-only interface, but castable).
 - Performance has been measured in the editor only; the frame rate on a mid-range device is still to be checked.
+- In the game an ice block does not show how many layers it has left (the editor does); the shell only disappears
+  when the last layer thaws.
+- A placed block's kind cannot be changed in the editor; erase it and paint it again.
 
 ## LLM tools
 

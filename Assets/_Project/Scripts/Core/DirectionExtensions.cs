@@ -26,5 +26,11 @@ namespace CBJ.Core
         {
             return direction == Direction.Up || direction == Direction.Down;
         }
+
+        /// <summary>The axis a step in this direction runs along.</summary>
+        public static Axis ToAxis(this Direction direction)
+        {
+            return direction.IsVertical() ? Axis.Vertical : Axis.Horizontal;
+        }
     }
 }
