@@ -10,11 +10,13 @@ namespace CBJ.Gameplay
     /// many cells it has. The piece geometry is copied once; the buffers are reused, so rebuilding allocates nothing
     /// once they have grown to the largest block. Only positions, normals and the first UV set are copied, which is all
     /// the block material uses. An arrow block's arrow goes into a second sub-mesh, so it keeps its own material on
-    /// the same renderer. The supplied block and arrow meshes must be imported readable.
+    /// the same renderer. The pieces leave the block's underside open, so a flat filler can close it from inside. The
+    /// supplied block and arrow meshes must be imported readable.
     /// </summary>
     internal sealed class BlockMeshBuilder
     {
         private const int PartPieces = (int)BlockPartKind.InnerCorner + 1;
+        private const int QuadVertices = 4;
 
         private readonly Vector3[][] _pieceVertices;
         private readonly Vector3[][] _pieceNormals;
@@ -62,6 +64,31 @@ namespace CBJ.Gameplay
         public void Add(BlockPartKind kind, Vector3 position, Quaternion rotation)
         {
             Append((int)kind, position, rotation, _indices);
+        }
+
+        /// <summary>
+        /// Adds an upward-facing quad spanning <paramref name="min"/> to <paramref name="max"/> on the XZ plane at
+        /// their height, so nothing below shows through gaps in the block body.
+        /// </summary>
+        public void AddFiller(Vector3 min, Vector3 max)
+        {
+            int first = _vertices.Count;
+            _vertices.Add(new Vector3(min.x, min.y, min.z));
+            _vertices.Add(new Vector3(min.x, min.y, max.z));
+            _vertices.Add(new Vector3(max.x, min.y, max.z));
+            _vertices.Add(new Vector3(max.x, min.y, min.z));
+            for (int i = 0; i < QuadVertices; i++)
+            {
+                _normals.Add(Vector3.up);
+                _uvs.Add(Vector2.zero);
+            }
+
+            _indices.Add(first);
+            _indices.Add(first + 1);
+            _indices.Add(first + 2);
+            _indices.Add(first);
+            _indices.Add(first + 2);
+            _indices.Add(first + 3);
         }
 
         /// <summary>

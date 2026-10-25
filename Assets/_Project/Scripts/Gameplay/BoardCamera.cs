@@ -4,7 +4,7 @@ using UnityEngine;
 namespace CBJ.Gameplay
 {
     /// <summary>
-    /// Orthographic board camera: frames the board between the HUD and the booster bar inside the safe area and
+    /// Perspective board camera: frames the board between the HUD and the booster bar inside the safe area and
     /// re-frames when the screen size or safe area changes (the editor Game view and foldables do change it).
     /// </summary>
     [RequireComponent(typeof(Camera))]
@@ -21,12 +21,13 @@ namespace CBJ.Gameplay
         /// <summary>The camera that renders the board; set by <see cref="Initialize"/>.</summary>
         public Camera Camera => _camera;
 
-        /// <summary>Sets the framing rules and switches the camera to orthographic; call once before <see cref="Frame"/>.</summary>
+        /// <summary>Sets the framing rules and switches the camera to perspective; call once before <see cref="Frame"/>.</summary>
         public void Initialize(GameConfig config)
         {
             _config = config;
             _camera = GetComponent<Camera>();
-            _camera.orthographic = true;
+            _camera.orthographic = false;
+            _camera.fieldOfView = config.CameraFieldOfView;
         }
 
         /// <summary>Frames <paramref name="worldBounds"/> now and whenever the screen size changes.</summary>
@@ -52,10 +53,9 @@ namespace CBJ.Gameplay
             CameraFit.ReservedBands(safeArea, Screen.height, _config.TopReservedScreen, _config.BottomReservedScreen,
                 out float top, out float bottom);
             Quaternion rotation = Quaternion.Euler(_config.CameraPitch, 0f, 0f);
-            CameraPlacement placement = CameraFit.Fit(_target, rotation, _camera.aspect, _config.CameraDistance,
+            CameraPlacement placement = CameraFit.Fit(_target, rotation, _camera.fieldOfView, _camera.aspect,
                 _config.CameraPadding, top, bottom);
             transform.SetPositionAndRotation(placement.Position, rotation);
-            _camera.orthographicSize = placement.OrthographicSize;
             _framedWidth = Screen.width;
             _framedHeight = Screen.height;
             _framedSafeArea = safeArea;

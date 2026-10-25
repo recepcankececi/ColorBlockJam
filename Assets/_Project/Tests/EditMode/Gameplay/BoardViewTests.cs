@@ -212,12 +212,24 @@ namespace CBJ.Tests.EditMode.Gameplay
         }
 
         [Test]
-        public void Show_Block_MergesEveryPieceIntoItsMesh()
+        public void Show_Block_MergesEveryPieceAndOneUndersideFillerPerCellIntoItsMesh()
         {
+            const int fillerVertices = 4;
             _view.Show(SampleLevel().BuildBoard());
 
             Mesh merged = _root.GetComponentInChildren<BlockView>().GetComponent<MeshFilter>().sharedMesh;
-            Assert.That(merged.vertexCount, Is.EqualTo(PieceVertexCount(TestShapes.L)));
+            int expected = PieceVertexCount(TestShapes.L) + TestShapes.L.Cells.Count * fillerVertices;
+            Assert.That(merged.vertexCount, Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void Show_Block_RestsItsLowestPointOnTheFloor()
+        {
+            const float clearance = 0.02f;
+            _view.Show(SampleLevel().BuildBoard());
+
+            Mesh merged = _root.GetComponentInChildren<BlockView>().GetComponent<MeshFilter>().sharedMesh;
+            Assert.That(merged.bounds.min.y, Is.EqualTo(_skin.FloorTile.bounds.max.y + clearance).Within(1e-3f));
         }
 
         [Test]

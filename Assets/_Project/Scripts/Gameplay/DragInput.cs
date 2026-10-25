@@ -1,21 +1,20 @@
 using System;
 using CBJ.Core;
-using CBJ.Data;
 using UnityEngine;
 
 namespace CBJ.Gameplay
 {
     /// <summary>
-    /// Drags blocks with one pointer: the block under the press is lifted and its view follows the finger along one
-    /// axis, as far as the model allows; <see cref="BlockDrag"/> steps the model cell by cell (ADR-002) and lets a
-    /// block that reaches its door leave on its own. Releasing settles the view back onto its model cell. After
+    /// Drags blocks with one pointer: the block under the press is lifted and its view follows the finger freely in
+    /// two dimensions, stopped by walls and other blocks; <see cref="BlockDrag"/> steps the model whenever the rounded
+    /// position changes (ADR-002) and lets a block that reaches its door leave on its own. Releasing settles the view
+    /// back onto its model cell. After
     /// <see cref="PickNext"/>, the next press picks a block instead of dragging it (the hammer booster).
     /// </summary>
     public sealed class DragInput : MonoBehaviour
     {
         private IPointerSource _pointer;
         private Camera _camera;
-        private float _axisLock;
         private LevelSession _session;
         private BoardView _board;
         private BlockDrag _drag;
@@ -23,11 +22,10 @@ namespace CBJ.Gameplay
         private bool _wasPressed;
 
         /// <summary>Sets the input source and camera; call once before <see cref="Bind"/>.</summary>
-        public void Initialize(IPointerSource pointer, Camera boardCamera, GameConfig config)
+        public void Initialize(IPointerSource pointer, Camera boardCamera)
         {
             _pointer = pointer;
             _camera = boardCamera;
-            _axisLock = config.DragAxisLock;
         }
 
         /// <summary>Drags blocks of the session's current board as shown by <paramref name="board"/>.</summary>
@@ -35,7 +33,7 @@ namespace CBJ.Gameplay
         {
             _session = session;
             _board = board;
-            _drag = new BlockDrag(session, _axisLock);
+            _drag = new BlockDrag(session);
             _wasPressed = false;
         }
 

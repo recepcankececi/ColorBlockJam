@@ -15,10 +15,12 @@ namespace CBJ.Gameplay
     /// </summary>
     public sealed class BoardView : MonoBehaviour
     {
-        private const int ExitTravelCells = 1;
-
-        // Lifts the shadow off the floor tiles so the two never z-fight.
+        // Lifts the shadow and the block bottoms off the floor tiles so they never z-fight.
         private const float ShadowClearance = 0.02f;
+        private const float BlockClearance = 0.02f;
+
+        // How far the underside filler stays inside each outer side of a cell, clear of the pieces' rounded corners.
+        private const float FillerInset = 0.3f;
         private const float QuarterTurnDegrees = 90f;
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -61,6 +63,7 @@ namespace CBJ.Gameplay
         private MeshPiecePool _arrowPool;
         private MeshPiecePool _shadowPool;
         private MeshRenderer _shadow;
+        private Color _shadowColor;
         private BlockView _shadowOwner;
         private ObjectPool<BlockView> _blockViewPool;
         private ObjectPool<DoorView> _doorViewPool;
@@ -68,7 +71,13 @@ namespace CBJ.Gameplay
         private Action<BlockView> _onDropped;
         private Vector3 _shadowOffset;
         private float _doorDepth;
+        private float _blockRaise;
+        private float _blockBottom;
         private float _pickHeight;
+        private Vector3 _wallScale;
+        private Vector3 _wallLift;
+        private Vector3 _cornerLift;
+        private Vector3 _doorLift;
         private float _boundsBottom;
         private float _boundsTop;
         private Vector3 _arrowOffset;
@@ -100,15 +109,29 @@ namespace CBJ.Gameplay
             _onExitFinished = OnExitFinished;
             _onDropped = OnDropped;
 
-            // Heights come from the supplied meshes, the wall pieces measured after their flip: blocks are picked on
-            // their top face (-Z as modelled), a wall's cap stands just above the floor while its outer side runs far
-            // below it, and arrows sit on top of the door frame.
-            _pickHeight = -skin.BlockCenter.bounds.min.z;
-            _boundsBottom = -skin.Wall.bounds.max.y;
-            _boundsTop = Mathf.Max(-skin.Wall.bounds.min.y, _pickHeight);
+            // Heights come from the supplied meshes, measured after the pieces are stood up. The block pieces reach
+            // below their pivot, so the merged block is raised until its lowest point rests on the floor tiles; it is
+            // picked on its top face (-Z as modelled). A wall's cap stands just above the floor while its outer side
+            // runs far below it: the wall pieces are scaled down in height around their cap, which keeps its place.
+            // Arrows sit on top of the door frame.
+            float floorTop = skin.FloorTile.bounds.max.y;
+            float blockLowest = -Mathf.Max(skin.BlockEdge.bounds.max.z,
+                Mathf.Max(skin.BlockOuterCorner.bounds.max.z, skin.BlockInnerCorner.bounds.max.z));
+            _blockRaise = floorTop + BlockClearance - blockLowest;
+            _blockBottom = floorTop + BlockClearance;
+            _pickHeight = -skin.BlockCenter.bounds.min.z + _blockRaise;
+            float scaleY = skin.WallScaleY;
+            _wallScale = new Vector3(1f, scaleY, 1f);
+            _wallLift = CapLift(skin.Wall, scaleY);
+            _cornerLift = CapLift(skin.WallCorner, scaleY);
+            _doorLift = CapLift(skin.Door, scaleY);
+            float wallCap = -skin.Wall.bounds.min.y;
+            _boundsBottom = wallCap - skin.Wall.bounds.size.y * scaleY;
+            _boundsTop = Mathf.Max(wallCap, _pickHeight);
             _arrowOffset = new Vector3(0f, skin.DoorArrow.bounds.max.y - skin.Door.bounds.min.y, 0f);
             _doorDepth = -skin.Door.bounds.min.y;
-            _shadowOffset = new Vector3(0f, skin.FloorTile.bounds.max.y + ShadowClearance, 0f);
+            _shadowOffset = new Vector3(0f, floorTop + ShadowClearance, 0f);
+            _shadowColor = skin.ShadowMaterial.GetColor(BaseColorId);
 
             _floorRoot = CreateGroup("Floor");
             _wallRoot = CreateGroup("Walls");
@@ -188,7 +211,7 @@ namespace CBJ.Gameplay
             _shadowOwner = view;
             float spread = _config.ShadowSpread * BoardLayout.CellSize;
             var scale = new Vector3(block.Shape.Width * spread, block.Shape.Height * spread, 1f);
-            view.Lift(_shadow.transform, scale, _shadowOffset, _onDropped);
+            view.Lift(_shadow, _shadowColor, scale, _shadowOffset, _onDropped);
         }
 
         /// <summary>Shows the held <paramref name="block"/> <paramref name="offsetCells"/> away from its model cell.</summary>
@@ -271,17 +294,14 @@ namespace CBJ.Gameplay
             _viewsByBlock[block].MoveTo(Layout.ToLocal(to));
         }
 
+        // The block keeps its shadow while the door swallows it; the shadow goes back to the pool when the exit ends.
         private void OnBlockExited(Block block, Door door)
         {
             BlockView view = _viewsByBlock[block];
             _viewsByBlock.Remove(block);
-            if (_shadowOwner == view)
-            {
-                ReleaseShadow();
-            }
-
-            Vector2 exit = block.Origin + door.Edge.ToOffset() * ExitTravelCells;
-            view.Exit(Layout.ToLocal(exit), _onExitFinished);
+            Vector2Int step = door.Edge.ToOffset();
+            float doorPlane = door.Edge.IsVertical() ? Layout.HalfDepth : Layout.HalfWidth;
+            view.Exit(new Vector3(step.x, 0f, step.y), doorPlane, _onExitFinished);
             _viewsByDoor[door].Open(_doorDepth, _config.DoorSinkDuration, _config.ExitDuration);
         }
 
@@ -295,7 +315,7 @@ namespace CBJ.Gameplay
                 ReleaseShadow();
             }
 
-            view.Exit(Layout.ToLocal(block.Origin), _onExitFinished);
+            view.Vanish(_onExitFinished);
         }
 
         private void OnIceLayerRemoved(Block block, int remaining)
@@ -308,6 +328,11 @@ namespace CBJ.Gameplay
 
         private void OnExitFinished(BlockView view)
         {
+            if (_shadowOwner == view)
+            {
+                ReleaseShadow();
+            }
+
             _blockViews.Remove(view);
             _blockViewPool.Release(view);
         }
@@ -372,14 +397,17 @@ namespace CBJ.Gameplay
                 }
 
                 // A wall segment is half a cell long.
-                _boardPieces.Add(_wallPool, _wallRoot, Layout.EdgePoint(edge, slot + firstHalf), rotation, null);
-                _boardPieces.Add(_wallPool, _wallRoot, Layout.EdgePoint(edge, slot + secondHalf), rotation, null);
+                _boardPieces.Add(_wallPool, _wallRoot, Layout.EdgePoint(edge, slot + firstHalf) + _wallLift, rotation,
+                    _wallScale, null);
+                _boardPieces.Add(_wallPool, _wallRoot, Layout.EdgePoint(edge, slot + secondHalf) + _wallLift, rotation,
+                    _wallScale, null);
             }
         }
 
         private void AddCorner(int signX, int signZ, int quarterTurns)
         {
-            _boardPieces.Add(_cornerPool, _wallRoot, Layout.CornerPoint(signX, signZ), Turn(quarterTurns) * WallPieceUpright, null);
+            _boardPieces.Add(_cornerPool, _wallRoot, Layout.CornerPoint(signX, signZ) + _cornerLift,
+                Turn(quarterTurns) * WallPieceUpright, _wallScale, null);
         }
 
         private bool HasDoorAt(Direction edge, int slot)
@@ -409,7 +437,8 @@ namespace CBJ.Gameplay
             SetTint(door.ColorId);
             Quaternion facing = Turn(BoardLayout.QuarterTurns(door.Edge)) * WallPieceUpright;
             Vector3 center = Layout.EdgePoint(door.Edge, door.Offset + door.Length * 0.5f);
-            view.Pieces.Add(_doorPool, view.transform, center, facing, new Vector3(door.Length, 1f, 1f), _tint);
+            view.Pieces.Add(_doorPool, view.transform, center + _doorLift, facing,
+                new Vector3(door.Length, _wallScale.y, 1f), _tint);
             view.Pieces.Add(_arrowPool, view.transform, center + _arrowOffset, facing, null);
         }
 
@@ -435,8 +464,11 @@ namespace CBJ.Gameplay
                     position += turn * QuadrantPivotOffset;
                 }
 
+                position.y += _blockRaise;
                 _blockMesh.Add(part.Kind, position, turn * BlockPartUpright);
             }
+
+            AddFillers(block.Shape);
 
             if (block.Kind == BlockKind.Arrow)
             {
@@ -449,6 +481,43 @@ namespace CBJ.Gameplay
             // Only the block material is tinted; the arrow keeps its own colour.
             SetTint(block.ColorId);
             view.Renderer.SetPropertyBlock(_tint, 0);
+        }
+
+        // One quad per cell closes the block's open underside, kept inside the outer sides where the pieces round off.
+        private void AddFillers(BlockShape shape)
+        {
+            IReadOnlyList<Vector2Int> cells = shape.Cells;
+            for (int i = 0; i < cells.Count; i++)
+            {
+                Vector2Int cell = cells[i];
+                float left = HasCell(cells, cell + Vector2Int.left) ? 0f : FillerInset;
+                float right = HasCell(cells, cell + Vector2Int.right) ? 0f : FillerInset;
+                float down = HasCell(cells, cell + Vector2Int.down) ? 0f : FillerInset;
+                float up = HasCell(cells, cell + Vector2Int.up) ? 0f : FillerInset;
+                var min = new Vector3(cell.x * BoardLayout.CellSize + left, _blockBottom, cell.y * BoardLayout.CellSize + down);
+                var max = new Vector3((cell.x + 1) * BoardLayout.CellSize - right, _blockBottom,
+                    (cell.y + 1) * BoardLayout.CellSize - up);
+                _blockMesh.AddFiller(min, max);
+            }
+        }
+
+        private static bool HasCell(IReadOnlyList<Vector2Int> cells, Vector2Int cell)
+        {
+            for (int i = 0; i < cells.Count; i++)
+            {
+                if (cells[i] == cell)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // Scaled in height around its pivot, a flipped wall piece would lower its cap; this lift puts the cap back.
+        private static Vector3 CapLift(Mesh piece, float scaleY)
+        {
+            return new Vector3(0f, -piece.bounds.min.y * (1f - scaleY), 0f);
         }
 
         // The arrow sits on the block's top face, sunk in so only its relief shows; the supplied arrow points along

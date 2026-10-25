@@ -5,14 +5,18 @@ using UnityEngine;
 namespace CBJ.Gameplay
 {
     /// <summary>
-    /// Draws one <see cref="CBJ.Core.Block"/> as a single merged mesh. While held it lifts, casts a shadow and follows
-    /// the drag offset on top of its model cell; released, it eases back onto the cell and drops; exiting, it slides
-    /// out and shrinks away. An ice block wears a translucent shell, a slightly larger copy of its mesh, that shrinks
-    /// away when the ice thaws. The view keeps its mesh while pooled and refills it for the next block. Idle views are
-    /// disabled, so only animating or held blocks run an update.
+    /// Draws one <see cref="CBJ.Core.Block"/> as a single merged mesh. While held it lifts, casts a shadow and
+    /// follows the drag offset on top of its model cell; released, it eases back onto the cell and drops. Exiting,
+    /// it slides towards its door and is swallowed: it shrinks only along the exit axis, pinned at the door plane,
+    /// while its shadow follows and fades. A destroyed block shrinks away where it stands. An ice block wears a
+    /// translucent shell, a slightly larger copy of its mesh, that shrinks away when the ice thaws. The view keeps its
+    /// mesh while pooled and refills it for the next block. Idle views are disabled, so only animating or held blocks
+    /// run an update.
     /// </summary>
     public sealed class BlockView : MonoBehaviour
     {
+        private static readonly int ShadowColorId = Shader.PropertyToID("_BaseColor");
+
         private Mesh _mesh;
         private MeshRenderer _renderer;
         private Transform _ice;
@@ -29,10 +33,16 @@ namespace CBJ.Gameplay
         private float _lift;
         private bool _held;
         private bool _exiting;
+        private bool _swallowed;
         private Vector3 _exitFrom;
-        private Vector3 _exitTo;
+        private float _exitLift;
         private float _exitProgress;
-        private Transform _shadow;
+        private bool _exitVertical;
+        private float _exitSign;
+        private float _exitPlane;
+        private MeshRenderer _shadow;
+        private MaterialPropertyBlock _shadowTint;
+        private Color _shadowColor;
         private Vector3 _shadowScale;
         private Vector3 _shadowOffset;
         private Action<BlockView> _dropped;
@@ -51,6 +61,7 @@ namespace CBJ.Gameplay
             _plainMaterials = new[] { material };
             _decalMaterials = new[] { material, decalMaterial };
             _renderer.sharedMaterials = _plainMaterials;
+            _shadowTint = new MaterialPropertyBlock();
 
             var ice = new GameObject("IceShell");
             ice.SetActive(false);
@@ -107,12 +118,15 @@ namespace CBJ.Gameplay
             enabled = true;
         }
 
-        internal void Lift(Transform shadow, Vector3 shadowScale, Vector3 shadowOffset, Action<BlockView> dropped)
+        // The shadow fades through a property block while the block exits; its pool clears the block on release.
+        internal void Lift(MeshRenderer shadow, Color shadowColor, Vector3 shadowScale, Vector3 shadowOffset,
+            Action<BlockView> dropped)
         {
             _shadowOffset = shadowOffset;
             _held = true;
             _settle = 1f;
             _shadow = shadow;
+            _shadowColor = shadowColor;
             _shadowScale = shadowScale;
             _dropped = dropped;
             enabled = true;
@@ -135,15 +149,20 @@ namespace CBJ.Gameplay
             _dropped = null;
         }
 
-        internal void Exit(Vector3 exitPosition, Action<BlockView> finished)
+        // The block leaves along the local unit vector direction; doorPlane is the door's coordinate along it.
+        internal void Exit(Vector3 direction, float doorPlane, Action<BlockView> finished)
         {
-            _held = false;
-            _exiting = true;
-            _exitFrom = _cell + _offset;
-            _exitTo = exitPosition;
-            _exitProgress = 0f;
-            _exitFinished = finished;
-            enabled = true;
+            BeginExit(finished);
+            _swallowed = true;
+            _exitVertical = direction.z != 0f;
+            _exitSign = Mathf.Sign(_exitVertical ? direction.z : direction.x);
+            _exitPlane = doorPlane;
+        }
+
+        internal void Vanish(Action<BlockView> finished)
+        {
+            BeginExit(finished);
+            _swallowed = false;
         }
 
         internal void ResetForPool()
@@ -157,6 +176,7 @@ namespace CBJ.Gameplay
             _dropped = null;
             _exitFinished = null;
             _exiting = false;
+            _swallowed = false;
             _held = false;
             transform.localScale = Vector3.one;
             enabled = false;
@@ -182,14 +202,19 @@ namespace CBJ.Gameplay
                 }
             }
 
-            float easedLift = Ease.OutCubic(_lift);
-            float liftScale = 1f + (_config.LiftScale - 1f) * easedLift;
             if (_exiting)
             {
                 _exitProgress = Mathf.MoveTowards(_exitProgress, 1f, deltaTime / _config.ExitDuration);
                 float eased = Ease.InQuad(_exitProgress);
-                Vector3 position = Vector3.LerpUnclamped(_exitFrom, _exitTo, eased) + Vector3.up * (_config.LiftHeight * easedLift);
-                Apply(position, Mathf.LerpUnclamped(liftScale, 0f, eased));
+                if (_swallowed)
+                {
+                    ApplySwallow(eased);
+                }
+                else
+                {
+                    Apply(_exitFrom + Vector3.up * (_config.LiftHeight * _exitLift), 1f - eased);
+                }
+
                 if (_exitProgress >= 1f)
                 {
                     enabled = false;
@@ -206,13 +231,14 @@ namespace CBJ.Gameplay
                 _offset = Vector3.LerpUnclamped(_settleFrom, Vector3.zero, Ease.OutCubic(_settle));
             }
 
-            easedLift = Ease.OutCubic(_lift);
+            float easedLift = Ease.OutCubic(_lift);
             Vector3 rest = _cell + _offset;
             Apply(rest + Vector3.up * (_config.LiftHeight * easedLift), 1f + (_config.LiftScale - 1f) * easedLift);
             if (_shadow != null)
             {
-                _shadow.localPosition = rest + _pivot + _shadowOffset;
-                _shadow.localScale = _shadowScale * easedLift;
+                Transform shadow = _shadow.transform;
+                shadow.localPosition = rest + _pivot + _shadowOffset;
+                shadow.localScale = _shadowScale * easedLift;
             }
 
             if (!_held && !_thawing && _lift <= 0f && _settle >= 1f)
@@ -220,6 +246,84 @@ namespace CBJ.Gameplay
                 enabled = false;
                 _dropped?.Invoke(this);
             }
+        }
+
+        private void BeginExit(Action<BlockView> finished)
+        {
+            _held = false;
+            _exiting = true;
+            _exitFrom = _cell + _offset;
+            _exitLift = Ease.OutCubic(_lift);
+            _exitProgress = 0f;
+            _exitFinished = finished;
+            enabled = true;
+        }
+
+        // Along the exit axis the block spans [trailing, leading]. The trailing face slides to the door plane; the
+        // leading face slides with it until it meets the plane and stays there, so the door swallows the block
+        // instead of the block passing through it. Across the axis the lifted size eases back to rest around the
+        // footprint centre, and the lift settles to the floor.
+        private void ApplySwallow(float eased)
+        {
+            float liftScale = 1f + (_config.LiftScale - 1f) * _exitLift;
+            float across = Mathf.LerpUnclamped(liftScale, 1f, eased);
+            float rest = 2f * (_exitVertical ? _pivot.z : _pivot.x);
+            float length = rest * liftScale;
+            float start = (_exitVertical ? _exitFrom.z + _pivot.z : _exitFrom.x + _pivot.x) - length * 0.5f;
+            float trailing0 = _exitSign > 0f ? start : -(start + length);
+            float leading0 = trailing0 + length;
+            float plane = Mathf.Max(_exitPlane, leading0);
+            float travel = (plane - trailing0) * eased;
+            float trailing = trailing0 + travel;
+            float leading = Mathf.Min(leading0 + travel, plane);
+            float scale = (leading - trailing) / rest;
+            float min = _exitSign > 0f ? trailing : -leading;
+
+            Vector3 position = _exitFrom + _pivot * (1f - across);
+            position.y = _exitFrom.y + _config.LiftHeight * _exitLift * (1f - eased);
+            var scales = new Vector3(across, across, across);
+            if (_exitVertical)
+            {
+                position.z = min;
+                scales.z = scale;
+            }
+            else
+            {
+                position.x = min;
+                scales.x = scale;
+            }
+
+            transform.localPosition = position;
+            transform.localScale = scales;
+            if (_shadow != null)
+            {
+                FollowWithShadow(position, scales, scale, 1f - eased);
+            }
+        }
+
+        private void FollowWithShadow(Vector3 position, Vector3 scales, float axisScale, float alpha)
+        {
+            Transform shadow = _shadow.transform;
+            Vector3 center = position + Vector3.Scale(_pivot, scales);
+            center.y = _exitFrom.y;
+            shadow.localPosition = center + _shadowOffset;
+
+            // The shadow quad lies flat: its local X runs along the board's X, its local Y along the board's Z.
+            Vector3 shadowScale = _shadowScale * _exitLift;
+            if (_exitVertical)
+            {
+                shadowScale.y *= axisScale;
+            }
+            else
+            {
+                shadowScale.x *= axisScale;
+            }
+
+            shadow.localScale = shadowScale;
+            Color color = _shadowColor;
+            color.a *= alpha;
+            _shadowTint.SetColor(ShadowColorId, color);
+            _shadow.SetPropertyBlock(_shadowTint);
         }
 
         private void BeginSettle()

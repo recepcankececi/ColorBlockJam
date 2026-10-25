@@ -23,6 +23,10 @@ namespace CBJ.Data
         [SerializeField] private Mesh _door;
         [SerializeField] private Mesh _doorArrow;
 
+        [Tooltip("Height scale of the wall, corner and door pieces. Their cap keeps its height above the floor; only the " +
+            "outer face below it gets shorter, so the rim reads low from a tilted camera.")]
+        [SerializeField, Range(0.1f, 1f)] private float _wallScaleY = 0.28f;
+
         [Header("Shared materials")]
         [SerializeField] private Material _blockMaterial;
         [SerializeField] private Material _floorMaterial;
@@ -66,6 +70,9 @@ namespace CBJ.Data
 
         /// <summary>Arrow drawn above a door, pointing out of the board.</summary>
         public Mesh DoorArrow => _doorArrow;
+
+        /// <summary>Height scale of the wall, corner and door pieces; their cap stays at its modelled height.</summary>
+        public float WallScaleY => _wallScaleY;
 
         /// <summary>Shared material of every block piece; tinted per renderer.</summary>
         public Material BlockMaterial => _blockMaterial;

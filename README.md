@@ -65,11 +65,13 @@ Decisions and why:
   or component dependency, so every rule is tested in EditMode without a scene. Views subscribe to model events
   (`BlockMoved`, `BlockExited`, `Cleared`) and never poll; the model does not know the views exist. A new block
   type is a model rule plus a view, and the editor and the game share the same data.
-- **Cell-snapped sliding (ADR-002).** The drag is projected onto its dominant axis and the block advances one cell
-  at a time with a collision check per step. This is deterministic and fully testable, and avoids the
-  corner-snagging and float issues of continuous sweeps. The view still follows the finger continuously: it may
-  lead its model cell by up to half a cell where the model allows the move, and the model steps when the view
-  crosses into the next cell (`BlockDrag`, pure and tested). A block exits when it is moved into a door of its
+- **Continuous drag over a cell model (ADR-002).** The model stays on whole cells and moves one cell per step with a
+  collision check, so the rules are deterministic and fully testable. On top of it the held block moves freely in
+  two dimensions: each frame the finger's lead is applied along X, then Y, each clamped by the nearest obstacle
+  (the unit cells of the other blocks and the wall cells around the board; door cells are open only to blocks of
+  their colour). The model origin is the rounded position, and the model steps whenever it changes. A box that
+  overlaps no obstacle is at least half a cell clear of it on some axis, so the rounded footprint is always free
+  (`BlockDrag`, pure and tested, including a randomised walk). A block exits when it is moved into a door of its
   colour whose width fits the block's side and every cell has a clear path to the edge.
 - **One level format: `LevelData` inside a `LevelDefinition` ScriptableObject, ordered by `LevelCatalog`
   (ADR-003).** Unity-native, referenced by drag and drop, inspectable, no file management. `LevelData` is a plain
@@ -138,15 +140,18 @@ Implemented after the required scope was complete (ADR-008), with every rule in 
   door cell.
 - **Exit rule:** a block leaves through a door of its colour only if its side fits the door's width and every
   cell has a clear path to that edge (so concave shapes cannot clip through walls). The exit happens in one step.
-- **Auto-exit:** after every step a drag commits, a block that touches an edge whose door lets it out leaves at
-  once (the drag direction is tried first), so the player never has to push past the edge. A block that starts a
-  level already next to its door still has to be dragged into it.
+- **Auto-exit:** whenever a held block's rounded position touches an edge whose door lets it out, it leaves at
+  once (the last step's direction is tried first), so the player never has to push past the edge or line the block
+  up exactly with the door. A block resting next to its door leaves on the first move after it is grabbed.
 - **Drag feel:** a grabbed block lifts slightly and casts a soft shadow (a rounded quad from the supplied
   `SquareRoundedMask`, sized to the block's bounding box, so L shapes get a rectangular shadow). It follows the
-  finger along one axis; the axis can change only while the block is close to its cell. Released, it eases back
-  onto its cell and drops.
-- **Exit animation:** the block slides one cell out through the door and shrinks away while the door sinks to the
-  board surface, then the door rises again. Only model events drive it. Pause freezes the timer and input only;
+  finger exactly wherever the board lets it go and slides along walls and blocks it is pushed against; the block
+  chases the finger's position (not each frame's movement), so it catches up after being stopped. Released, it
+  eases back onto its model cell (120 ms) and drops.
+- **Exit animation:** the door swallows the block: it slides along the exit axis and shrinks only along that axis,
+  pinned at the door plane (280 ms, ease-in), while its shadow follows and fades. The door sinks to the board
+  surface meanwhile and rises again after. A block destroyed by the hammer shrinks away in place. Only model events
+  drive it. Pause freezes the timer and input only;
   an exit or settle already under way finishes behind the Pause popup.
 - **Validation** (optional O1) is static only: board size, timer, overlapping or out-of-range blocks and doors,
   and whether every block has a door of its colour wide enough. There is no solver. A level with errors cannot be
@@ -164,7 +169,7 @@ Implemented after the required scope was complete (ADR-008), with every rule in 
 - **Freeze** used during a freeze would extend it; with one use per attempt this does not happen in play. While
   frozen the timer holder and its text turn blue and the low-time pulse stops.
 - **Input:** one pointer only — the first finger drags, a second finger is ignored and never takes over. A press
-  that starts on UI never drags a block. A diagonal drag tries the dominant axis first, then the other one.
+  that starts on UI never drags a block. A diagonal drag moves along X first, then Y.
 - **Flow:** a win pays the coin reward, saves the next level and advances automatically after a short delay (no
   win popup); after the last level the game wraps to level 1. A fail opens a popup with Retry and Home.
 - **Leaving the app** mid-level (home button, call, lock screen) pauses the attempt and shows the Pause popup on
@@ -180,9 +185,14 @@ Implemented after the required scope was complete (ADR-008), with every rule in 
 - **Settings toggles** (vibration, sound, music) show a distinct on/off state and are saved; only an "On" sprite
   was supplied, so "Off" is the same art tinted grey with an "Off" label. The game has no audio or haptics.
 - **Placeholders** (tabs, the Vacuum and Rocket boosters, profile, lives, other buttons) give press feedback only.
-- **Camera:** orthographic, pitched 60° (set in `GameConfig`), framed to the board between the HUD bands. 60–65°
-  all fit every level at 9:16 and 20:9 (the fit is width-bound); 60° gives tall boards the most room. Supplied
-  block pieces are 1-unit quadrants, so a cell is 2 world units; each door has one white arrow in its middle.
+- **Camera:** perspective, 45° field of view, pitched 55° (both in `GameConfig`). `CameraFit` solves for the
+  closest distance at which the board, its walls and a margin fit the frustum between the HUD bands and inside the
+  safe area; on every current level at 9:16 and 20:9 the fit is width-bound. Supplied block pieces are 1-unit
+  quadrants, so a cell is 2 world units; each door has one white arrow in its middle.
+- **Board pieces:** the supplied block pieces reach below their pivot, so each merged block is raised until its
+  lowest point rests on the floor tiles, and flat fillers close its open underside. The supplied wall pieces are
+  much taller than a cell below their cap; they are scaled down in height around the cap (`BoardSkin`), so the rim
+  reads short from the tilted camera.
 - **Palette:** colour ids are palette indices, so new colours are only appended (Dark Green is id 8).
 - **Text** uses uGUI legacy `Text` with the built-in font (TextMesh Pro resources are not imported).
 - **Restart** goes from the UI straight to the level player, while Play and Home go through the game flow; restart

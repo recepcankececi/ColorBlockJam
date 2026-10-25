@@ -28,6 +28,7 @@ MonoBehaviour:
   _door: {fileID: -621459505486514712, guid: 0b491d2c975ac914fa2fb907b02b1376, type: 3}
   _doorArrow: {fileID: 2650694734197125860, guid: 0b491d2c975ac914fa2fb907b02b1376,
     type: 3}
+  _wallScaleY: 0.28
   _blockMaterial: {fileID: 2100000, guid: 15f8c445b101b274f9279d76ad938f61, type: 2}
   _floorMaterial: {fileID: 2100000, guid: 056768d3ce9954447819726dbd082683, type: 2}
   _wallMaterial: {fileID: 2100000, guid: fa6fa710874528c44abe2af42e69e938, type: 2}

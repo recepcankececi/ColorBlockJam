@@ -10,9 +10,6 @@ namespace CBJ.Data
     public sealed class GameConfig : ScriptableObject
     {
         [Header("Drag")]
-        [Tooltip("How far, in cells, the finger must lead a held block before it picks an axis to slide along.")]
-        [SerializeField, Range(0.05f, 0.45f)] private float _dragAxisLock = 0.2f;
-
         [Tooltip("World units a held block rises above the board.")]
         [SerializeField, Min(0f)] private float _liftHeight = 0.4f;
 
@@ -29,8 +26,8 @@ namespace CBJ.Data
         [SerializeField, Range(0.5f, 1.5f)] private float _shadowSpread = 1.05f;
 
         [Header("Exit")]
-        [Tooltip("Seconds an exiting block takes to slide out one cell and shrink away.")]
-        [SerializeField, Min(0.01f)] private float _exitDuration = 0.25f;
+        [Tooltip("Seconds an exiting block takes to slide into its door and be swallowed by it.")]
+        [SerializeField, Min(0.01f)] private float _exitDuration = 0.28f;
 
         [Tooltip("Seconds a door takes to sink into the board when a block leaves through it (and to rise again).")]
         [SerializeField, Min(0.01f)] private float _doorSinkDuration = 0.15f;
@@ -54,12 +51,12 @@ namespace CBJ.Data
 
         [Header("Camera")]
         [Tooltip("Downward tilt of the board camera in degrees; 90 looks straight down.")]
-        [SerializeField, Range(30f, 90f)] private float _cameraPitch = 75f;
+        [SerializeField, Range(30f, 90f)] private float _cameraPitch = 55f;
 
-        [Tooltip("Distance from the board to the camera; only affects clipping for an orthographic camera.")]
-        [SerializeField, Min(1f)] private float _cameraDistance = 40f;
+        [Tooltip("Vertical field of view of the perspective board camera in degrees.")]
+        [SerializeField, Range(20f, 90f)] private float _cameraFieldOfView = 45f;
 
-        [Tooltip("Empty world space kept around the board on every side.")]
+        [Tooltip("Empty world space kept around the board on every side, measured on the board.")]
         [SerializeField, Min(0f)] private float _cameraPadding = 0.5f;
 
         [Tooltip("Fraction of the screen height kept free at the top for the HUD.")]
@@ -76,9 +73,6 @@ namespace CBJ.Data
         [Tooltip("Coins the player earns for completing a level.")]
         [SerializeField, Min(0)] private int _coinsPerWin = 10;
 
-        /// <summary>How far, in cells, the finger must lead a held block before it picks an axis.</summary>
-        public float DragAxisLock => _dragAxisLock;
-
         /// <summary>World units a held block rises above the board.</summary>
         public float LiftHeight => _liftHeight;
 
@@ -94,7 +88,7 @@ namespace CBJ.Data
         /// <summary>Size of the shadow under a held block relative to its footprint.</summary>
         public float ShadowSpread => _shadowSpread;
 
-        /// <summary>Seconds an exiting block takes to slide out and shrink away.</summary>
+        /// <summary>Seconds an exiting block takes to slide into its door and be swallowed by it.</summary>
         public float ExitDuration => _exitDuration;
 
         /// <summary>Seconds a door takes to sink when a block leaves through it, and to rise again.</summary>
@@ -118,8 +112,8 @@ namespace CBJ.Data
         /// <summary>Downward tilt of the board camera in degrees.</summary>
         public float CameraPitch => _cameraPitch;
 
-        /// <summary>Distance from the board to the camera.</summary>
-        public float CameraDistance => _cameraDistance;
+        /// <summary>Vertical field of view of the board camera in degrees.</summary>
+        public float CameraFieldOfView => _cameraFieldOfView;
 
         /// <summary>Empty world space kept around the board on every side.</summary>
         public float CameraPadding => _cameraPadding;
