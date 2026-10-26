@@ -104,6 +104,8 @@ Claude Code (Anthropic) was used as an implementation assistant: writing C# from
 decision records, EditMode tests, editor-tool boilerplate (IMGUI), and the first draft of this README.
 Architecture and data-model decisions, the editor's UX design, level design, code review, device testing and
 the final verification of every acceptance criterion are my own work. No LLM-generated art or assets were used.
+During development Claude Code operated the Unity editor through the MCP for Unity package; it is development
+tooling and is not part of the submission.
 
 ## Approximate work time
 
