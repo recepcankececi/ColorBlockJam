@@ -73,7 +73,7 @@ namespace CBJ.Gameplay
         private float _doorDepth;
         private float _blockRaise;
         private float _blockBottom;
-        private float _pickHeight;
+        private float _blockTop;
         private Vector3 _wallScale;
         private Vector3 _wallLift;
         private Vector3 _cornerLift;
@@ -110,8 +110,8 @@ namespace CBJ.Gameplay
             _onDropped = OnDropped;
 
             // Heights come from the supplied meshes, measured after the pieces are stood up. The block pieces reach
-            // below their pivot, so the merged block is raised until its lowest point rests on the floor tiles; it is
-            // picked on its top face (-Z as modelled). A wall's cap stands just above the floor while its outer side
+            // below their pivot, so the merged block is raised until its lowest point rests on the floor tiles; its top
+            // face is -Z as modelled. A wall's cap stands just above the floor while its outer side
             // runs far below it: the wall pieces are scaled down in height around their cap, which keeps its place.
             // Arrows sit on top of the door frame.
             float floorTop = skin.FloorTile.bounds.max.y;
@@ -119,7 +119,7 @@ namespace CBJ.Gameplay
                 Mathf.Max(skin.BlockOuterCorner.bounds.max.z, skin.BlockInnerCorner.bounds.max.z));
             _blockRaise = floorTop + BlockClearance - blockLowest;
             _blockBottom = floorTop + BlockClearance;
-            _pickHeight = -skin.BlockCenter.bounds.min.z + _blockRaise;
+            _blockTop = -skin.BlockCenter.bounds.min.z + _blockRaise;
             float scaleY = skin.WallScaleY;
             _wallScale = new Vector3(1f, scaleY, 1f);
             _wallLift = CapLift(skin.Wall, scaleY);
@@ -127,7 +127,7 @@ namespace CBJ.Gameplay
             _doorLift = CapLift(skin.Door, scaleY);
             float wallCap = -skin.Wall.bounds.min.y;
             _boundsBottom = wallCap - skin.Wall.bounds.size.y * scaleY;
-            _boundsTop = Mathf.Max(wallCap, _pickHeight);
+            _boundsTop = Mathf.Max(wallCap, _blockTop);
             _arrowOffset = new Vector3(0f, skin.DoorArrow.bounds.max.y - skin.Door.bounds.min.y, 0f);
             _doorDepth = -skin.Door.bounds.min.y;
             _shadowOffset = new Vector3(0f, floorTop + ShadowClearance, 0f);
@@ -237,8 +237,10 @@ namespace CBJ.Gameplay
         }
 
         /// <summary>
-        /// Cell-space point where <paramref name="ray"/> meets the plane of the block tops; false when it misses.
-        /// The point may lie outside the board.
+        /// Cell-space point where <paramref name="ray"/> meets the pick plane (<see cref="GameConfig.PickPlaneHeight"/>,
+        /// the top face of a resting block); false when it misses. Grabbing and dragging both use it, so a finger on a
+        /// block's visible top lands on that block's cell and the grab offset stays the same while it moves. The point
+        /// may lie outside the board.
         /// </summary>
         public bool TryRaycast(Ray ray, out Vector2 cellPoint)
         {
@@ -248,7 +250,7 @@ namespace CBJ.Gameplay
                 return false;
             }
 
-            var plane = new Plane(transform.up, transform.TransformPoint(new Vector3(0f, _pickHeight, 0f)));
+            var plane = new Plane(transform.up, transform.TransformPoint(new Vector3(0f, _config.PickPlaneHeight, 0f)));
             if (!plane.Raycast(ray, out float distance))
             {
                 return false;
@@ -533,7 +535,7 @@ namespace CBJ.Gameplay
         private void AddArrow(Block block)
         {
             ArrowPlacement.Find(block.Shape, block.ArrowAxis, out Vector2 center, out int length);
-            var position = new Vector3(center.x * BoardLayout.CellSize, _pickHeight - _config.ArrowSink, center.y * BoardLayout.CellSize);
+            var position = new Vector3(center.x * BoardLayout.CellSize, _blockTop - _config.ArrowSink, center.y * BoardLayout.CellSize);
             Quaternion rotation = block.ArrowAxis == Axis.Horizontal ? Turn(1) * BlockPartUpright : BlockPartUpright;
             _blockMesh.AddArrow(length, position, rotation);
         }

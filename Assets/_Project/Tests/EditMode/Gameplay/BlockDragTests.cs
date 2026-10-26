@@ -18,8 +18,8 @@ namespace CBJ.Tests.EditMode.Gameplay
         private const int WalkFrames = 2000;
         private const int GrabEveryFrames = 50;
         private const float Frame = 1f / 60f;
-        private const float MaxSpeed = 80f;
-        private const float SmoothTime = 0.012f;
+        private const float MaxSpeed = 30f;
+        private const float SmoothTime = 0.04f;
         private const float AlignTolerance = 0.08f;
         private const int SmoothFrames = 120;
         private const float SmoothArrival = 1e-3f;

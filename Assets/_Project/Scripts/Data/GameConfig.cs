@@ -17,19 +17,27 @@ namespace CBJ.Data
         [SerializeField, Range(1f, 1.2f)] private float _liftScale = 1.03f;
 
         [Tooltip("Seconds a block takes to rise when grabbed (and to drop when released).")]
-        [SerializeField, Min(0.01f)] private float _liftDuration = 0.04f;
+        [SerializeField, Min(0.01f)] private float _liftDuration = 0.05f;
 
         [Tooltip("Fastest a held block follows the finger, in cells per second.")]
-        [SerializeField, Min(0.1f)] private float _dragMaxSpeed = 80f;
+        [SerializeField, Min(0.1f)] private float _dragMaxSpeed = 30f;
 
         [Tooltip("Seconds a held block takes, roughly, to catch up with the finger; 0 follows at once.")]
-        [SerializeField, Min(0f)] private float _dragSmoothTime = 0.012f;
+        [SerializeField, Min(0f)] private float _dragSmoothTime = 0.04f;
 
         [Tooltip("Seconds a released block takes to ease back onto its cell.")]
         [SerializeField, Min(0.01f)] private float _settleDuration = 0.12f;
 
         [Tooltip("Size of the shadow under a held block relative to the block's footprint.")]
         [SerializeField, Range(0.5f, 1.5f)] private float _shadowSpread = 1.05f;
+
+        [Header("Picking")]
+        [Tooltip("Height above the board where a press meets the blocks: the top face of a resting block (floor top + " +
+            "block raise + block height, measured from the supplied meshes).")]
+        [SerializeField, Min(0f)] private float _pickPlaneHeight = 1.639f;
+
+        [Tooltip("Cells a press may land off a block's edge and still grab it; the nearest block wins.")]
+        [SerializeField, Range(0f, 1f)] private float _grabTolerance = 0.35f;
 
         [Header("Exit")]
         [Tooltip("Cells a held block may sit off its door's line and still leave at once; further off it leaves on release.")]
@@ -105,6 +113,12 @@ namespace CBJ.Data
 
         /// <summary>Size of the shadow under a held block relative to its footprint.</summary>
         public float ShadowSpread => _shadowSpread;
+
+        /// <summary>Height above the board, in world units, of the plane presses are projected onto.</summary>
+        public float PickPlaneHeight => _pickPlaneHeight;
+
+        /// <summary>Cells a press may land off a block's edge and still grab it.</summary>
+        public float GrabTolerance => _grabTolerance;
 
         /// <summary>Cells a held block may sit off its door's line and still leave at once.</summary>
         public float ExitAlignTolerance => _exitAlignTolerance;

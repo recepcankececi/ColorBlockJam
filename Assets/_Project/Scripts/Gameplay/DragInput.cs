@@ -1,7 +1,9 @@
 using System;
+using System.Diagnostics;
 using CBJ.Core;
 using CBJ.Data;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 namespace CBJ.Gameplay
 {
@@ -22,6 +24,7 @@ namespace CBJ.Gameplay
         private BlockDrag _drag;
         private Action<Block> _pick;
         private bool _wasPressed;
+        private int _missedGrabs;
 
         /// <summary>Sets the input source, camera and drag tunables; call once before <see cref="Bind"/>.</summary>
         public void Initialize(IPointerSource pointer, Camera boardCamera, GameConfig config)
@@ -107,16 +110,31 @@ namespace CBJ.Gameplay
             }
         }
 
-        // A frozen ice block is not picked up: lifting it would suggest it can move. A block still settling from an
-        // earlier release is caught where its view is, so the grab never snaps it.
+        // A press just off a block's edge still grabs it (GrabTolerance). A frozen ice block is not picked up: lifting
+        // it would suggest it can move. A block still settling from an earlier release is caught where its view is, so
+        // the grab never snaps it.
         private void Grab(Vector2 point)
         {
-            Block block = _session.Board.GetBlockAt(Vector2Int.FloorToInt(point));
-            if (block != null && block.IceLayers == 0)
+            Block block = BlockPicker.Find(_session.Board, point, _config.GrabTolerance, out float distance);
+            if (block == null)
+            {
+                LogMissedGrab(point, distance);
+                return;
+            }
+
+            if (block.IceLayers == 0)
             {
                 _drag.Grab(block, point, _board.ViewOffset(block));
                 _board.Lift(block);
             }
+        }
+
+        // Temporary device diagnostics for grab reliability; development builds only.
+        [Conditional("DEVELOPMENT_BUILD")]
+        private void LogMissedGrab(Vector2 point, float distance)
+        {
+            _missedGrabs++;
+            Debug.Log($"[DragInput] Missed grab #{_missedGrabs} at cell point {point}; nearest block {distance:0.00} cells away.");
         }
 
         // An exited block is already animating out through BoardView's model events; nothing more to show here.
