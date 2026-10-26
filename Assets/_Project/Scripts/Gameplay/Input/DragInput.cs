@@ -1,9 +1,7 @@
 using System;
-using System.Diagnostics;
 using CBJ.Core;
 using CBJ.Data;
 using UnityEngine;
-using Debug = UnityEngine.Debug;
 
 namespace CBJ.Gameplay
 {
@@ -24,7 +22,6 @@ namespace CBJ.Gameplay
         private BlockDrag _drag;
         private Action<Block> _pick;
         private bool _wasPressed;
-        private int _missedGrabs;
 
         /// <summary>Sets the input source, camera and drag tunables; call once before <see cref="Bind"/>.</summary>
         public void Initialize(IPointerSource pointer, Camera boardCamera, GameConfig config)
@@ -115,26 +112,12 @@ namespace CBJ.Gameplay
         // the grab never snaps it.
         private void Grab(Vector2 point)
         {
-            Block block = BlockPicker.Find(_session.Board, point, _config.GrabTolerance, out float distance);
-            if (block == null)
-            {
-                LogMissedGrab(point, distance);
-                return;
-            }
-
-            if (block.IceLayers == 0)
+            Block block = BlockPicker.Find(_session.Board, point, _config.GrabTolerance);
+            if (block != null && block.IceLayers == 0)
             {
                 _drag.Grab(block, point, _board.ViewOffset(block));
                 _board.Lift(block);
             }
-        }
-
-        // Temporary device diagnostics for grab reliability; development builds only.
-        [Conditional("DEVELOPMENT_BUILD")]
-        private void LogMissedGrab(Vector2 point, float distance)
-        {
-            _missedGrabs++;
-            Debug.Log($"[DragInput] Missed grab #{_missedGrabs} at cell point {point}; nearest block {distance:0.00} cells away.");
         }
 
         // An exited block is already animating out through BoardView's model events; nothing more to show here.

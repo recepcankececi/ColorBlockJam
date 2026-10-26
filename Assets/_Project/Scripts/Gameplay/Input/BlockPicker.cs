@@ -13,10 +13,9 @@ namespace CBJ.Gameplay
     {
         /// <summary>
         /// Returns the block covering <paramref name="point"/> (cell space), or else the nearest block whose cell
-        /// boxes lie within <paramref name="tolerance"/> cells of it; null when none does. <paramref name="distance"/>
-        /// is the distance to the nearest block whatever the tolerance (0 when covered, infinity on an empty board).
+        /// boxes lie within <paramref name="tolerance"/> cells of it; null when none does.
         /// </summary>
-        public static Block Find(BoardModel board, Vector2 point, float tolerance, out float distance)
+        public static Block Find(BoardModel board, Vector2 point, float tolerance)
         {
             if (board == null)
             {
@@ -26,12 +25,11 @@ namespace CBJ.Gameplay
             Block covering = board.GetBlockAt(Vector2Int.FloorToInt(point));
             if (covering != null)
             {
-                distance = 0f;
                 return covering;
             }
 
             Block nearest = null;
-            distance = float.PositiveInfinity;
+            float distance = float.PositiveInfinity;
             IReadOnlyList<Block> blocks = board.Blocks;
             for (int i = 0; i < blocks.Count; i++)
             {

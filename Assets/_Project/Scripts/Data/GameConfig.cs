@@ -26,7 +26,7 @@ namespace CBJ.Data
         [SerializeField, Min(0f)] private float _dragSmoothTime = 0.04f;
 
         [Tooltip("Seconds a released block takes to ease back onto its cell.")]
-        [SerializeField, Min(0.01f)] private float _settleDuration = 0.12f;
+        [SerializeField, Min(0.01f)] private float _settleDuration = 0.1f;
 
         [Tooltip("Size of the shadow under a held block relative to the block's footprint.")]
         [SerializeField, Range(0.5f, 1.5f)] private float _shadowSpread = 1.05f;
@@ -47,7 +47,7 @@ namespace CBJ.Data
         [SerializeField, Min(0f)] private float _exitTravelCells = 1.5f;
 
         [Tooltip("Seconds an exiting block takes to slide into its door and be swallowed by it.")]
-        [SerializeField, Min(0.01f)] private float _exitDuration = 0.28f;
+        [SerializeField, Min(0.01f)] private float _exitDuration = 0.3f;
 
         [Tooltip("Seconds a door takes to sink into the board when a block leaves through it (and to rise again).")]
         [SerializeField, Min(0.01f)] private float _doorSinkDuration = 0.15f;

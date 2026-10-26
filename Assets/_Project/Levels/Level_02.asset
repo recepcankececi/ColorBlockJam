@@ -15,7 +15,7 @@ MonoBehaviour:
   _level:
     _width: 5
     _height: 5
-    _timerSeconds: 300
+    _timerSeconds: 60
     _doors:
     - _edge: 0
       _offset: 2
@@ -32,9 +32,15 @@ MonoBehaviour:
       - {x: 0, y: 2}
       _origin: {x: 1, y: 1}
       _colorId: 2
+      _kind: 0
+      _arrowAxis: 0
+      _iceLayers: 0
     - _cells:
       - {x: 0, y: 0}
       - {x: 0, y: 1}
       - {x: 0, y: 2}
       _origin: {x: 3, y: 1}
       _colorId: 5
+      _kind: 0
+      _arrowAxis: 0
+      _iceLayers: 0

@@ -10,17 +10,15 @@ namespace CBJ.Tests.EditMode.Gameplay
     {
         private const int Red = 0;
         private const float GrabTolerance = 0.35f;
-        private const float Tolerance = 1e-4f;
 
         [Test]
-        public void Find_PointOnABlockCell_ReturnsThatBlockAtDistanceZero()
+        public void Find_PointOnABlockCell_ReturnsThatBlock()
         {
             BoardModel board = Board(new Vector2Int(1, 1));
 
-            Block block = BlockPicker.Find(board, new Vector2(1.5f, 1.5f), GrabTolerance, out float distance);
+            Block block = BlockPicker.Find(board, new Vector2(1.5f, 1.5f), GrabTolerance);
 
             Assert.That(block, Is.SameAs(board.Blocks[0]));
-            Assert.That(distance, Is.EqualTo(0f));
         }
 
         [Test]
@@ -28,32 +26,29 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BoardModel board = Board(new Vector2Int(1, 1));
 
-            Block block = BlockPicker.Find(board, new Vector2(2.3f, 1.5f), GrabTolerance, out float distance);
+            Block block = BlockPicker.Find(board, new Vector2(2.3f, 1.5f), GrabTolerance);
 
             Assert.That(block, Is.SameAs(board.Blocks[0]));
-            Assert.That(distance, Is.EqualTo(0.3f).Within(Tolerance));
         }
 
         [Test]
-        public void Find_PointBeyondTolerance_ReturnsNullAndTheNearestDistance()
+        public void Find_PointBeyondTolerance_ReturnsNull()
         {
             BoardModel board = Board(new Vector2Int(0, 0));
 
-            Block block = BlockPicker.Find(board, new Vector2(1.5f, 0.5f), GrabTolerance, out float distance);
+            Block block = BlockPicker.Find(board, new Vector2(1.5f, 0.5f), GrabTolerance);
 
             Assert.That(block, Is.Null);
-            Assert.That(distance, Is.EqualTo(0.5f).Within(Tolerance));
         }
 
         [Test]
-        public void Find_PointNearACorner_MeasuresTheDiagonalToTheCellBox()
+        public void Find_PointNearACornerWithinToleranceOnEachAxisButNotDiagonally_ReturnsNull()
         {
             BoardModel board = Board(new Vector2Int(0, 0));
 
-            Block block = BlockPicker.Find(board, new Vector2(1.3f, 1.3f), GrabTolerance, out float distance);
+            Block block = BlockPicker.Find(board, new Vector2(1.3f, 1.3f), GrabTolerance);
 
             Assert.That(block, Is.Null);
-            Assert.That(distance, Is.EqualTo(Mathf.Sqrt(0.18f)).Within(Tolerance));
         }
 
         [Test]
@@ -61,7 +56,7 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BoardModel board = Board(new Vector2Int(0, 0), new Vector2Int(1, 1));
 
-            Block block = BlockPicker.Find(board, new Vector2(1.2f, 0.9f), GrabTolerance, out _);
+            Block block = BlockPicker.Find(board, new Vector2(1.2f, 0.9f), GrabTolerance);
 
             Assert.That(block, Is.SameAs(board.Blocks[1]));
         }
@@ -71,22 +66,21 @@ namespace CBJ.Tests.EditMode.Gameplay
         {
             BoardModel board = Board(new Vector2Int(0, 1));
 
-            Block block = BlockPicker.Find(board, new Vector2(-0.2f, 1.5f), GrabTolerance, out _);
+            Block block = BlockPicker.Find(board, new Vector2(-0.2f, 1.5f), GrabTolerance);
 
             Assert.That(block, Is.SameAs(board.Blocks[0]));
         }
 
         [Test]
-        public void Find_NearAnEmptyCellOfAConcaveShape_MeasuresToTheBlocksCells()
+        public void Find_CentreOfTheEmptyCellOfAConcaveShape_ReturnsNull()
         {
             var level = new LevelData(4, 3, 30);
             level.AddBlock(new BlockData(TestShapes.L.Cells, Vector2Int.zero, Red));
             BoardModel board = level.BuildBoard();
 
-            Block block = BlockPicker.Find(board, new Vector2(1.5f, 1.5f), GrabTolerance, out float distance);
+            Block block = BlockPicker.Find(board, new Vector2(1.5f, 1.5f), GrabTolerance);
 
             Assert.That(block, Is.Null);
-            Assert.That(distance, Is.EqualTo(0.5f).Within(Tolerance));
         }
 
         [Test]
@@ -95,7 +89,7 @@ namespace CBJ.Tests.EditMode.Gameplay
             BoardModel board = Board(new Vector2Int(0, 0), new Vector2Int(3, 0));
             board.Destroy(board.Blocks[0]);
 
-            Block block = BlockPicker.Find(board, new Vector2(1.2f, 0.5f), GrabTolerance, out _);
+            Block block = BlockPicker.Find(board, new Vector2(1.2f, 0.5f), GrabTolerance);
 
             Assert.That(block, Is.Null);
         }
