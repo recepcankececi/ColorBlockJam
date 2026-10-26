@@ -99,19 +99,22 @@ namespace CBJ.Gameplay
             {
                 Grab(point);
             }
-            else if (_drag.Held != null)
+
+            // Following starts on the grab frame too, so the view is placed before the lift has even begun.
+            if (_drag.Held != null)
             {
                 Follow(point);
             }
         }
 
-        // A frozen ice block is not picked up: lifting it would suggest it can move.
+        // A frozen ice block is not picked up: lifting it would suggest it can move. A block still settling from an
+        // earlier release is caught where its view is, so the grab never snaps it.
         private void Grab(Vector2 point)
         {
             Block block = _session.Board.GetBlockAt(Vector2Int.FloorToInt(point));
             if (block != null && block.IceLayers == 0)
             {
-                _drag.Grab(block, point);
+                _drag.Grab(block, point, _board.ViewOffset(block));
                 _board.Lift(block);
             }
         }

@@ -77,9 +77,21 @@ namespace CBJ.Gameplay
         /// </summary>
         public void Grab(Block block, Vector2 point)
         {
+            Grab(block, point, Vector2.zero);
+        }
+
+        /// <summary>
+        /// Holds <paramref name="block"/> like <see cref="Grab(Block, Vector2)"/>, starting
+        /// <paramref name="startOffset"/> cells away from its model cell, where its view still is (e.g. mid-settle).
+        /// The offset is kept under half a cell per axis so the model cell stays the rounded position.
+        /// </summary>
+        public void Grab(Block block, Vector2 point, Vector2 startOffset)
+        {
             Held = block ?? throw new ArgumentNullException(nameof(block));
-            Position = block.Origin;
-            _grabOffset = point - block.Origin;
+            const float limit = HalfCell - Contact;
+            Position = block.Origin + new Vector2(Mathf.Clamp(startOffset.x, -limit, limit),
+                Mathf.Clamp(startOffset.y, -limit, limit));
+            _grabOffset = point - Position;
             _velocity = Vector2.zero;
             _lastDirection = Direction.Right;
             CollectObstacles();

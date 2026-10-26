@@ -214,6 +214,13 @@ namespace CBJ.Gameplay
             view.Lift(_shadow, _shadowColor, scale, _shadowOffset, _onDropped);
         }
 
+        /// <summary>Where the view of <paramref name="block"/> sits relative to its model cell right now, in cells.</summary>
+        public Vector2 ViewOffset(Block block)
+        {
+            Vector3 offset = _viewsByBlock[block].Offset / BoardLayout.CellSize;
+            return new Vector2(offset.x, offset.z);
+        }
+
         /// <summary>Shows the held <paramref name="block"/> <paramref name="offsetCells"/> away from its model cell.</summary>
         public void Hold(Block block, Vector2 offsetCells)
         {

@@ -53,6 +53,9 @@ namespace CBJ.Gameplay
 
         internal MeshRenderer Renderer => _renderer;
 
+        // Where the view sits relative to its cell right now, settle included.
+        internal Vector3 Offset => _offset;
+
         internal void Initialize(Material material, Material decalMaterial, Material iceMaterial, GameConfig config)
         {
             _config = config;
@@ -134,9 +137,11 @@ namespace CBJ.Gameplay
             enabled = true;
         }
 
+        // Applied at once from the drag's Update rather than waiting for LateUpdate; the lift keeps animating there.
         internal void Hold(Vector3 offset)
         {
             _offset = offset;
+            ApplyRest();
         }
 
         internal void Drop()
@@ -244,16 +249,7 @@ namespace CBJ.Gameplay
                 _offset = Vector3.LerpUnclamped(_settleFrom, Vector3.zero, Ease.OutCubic(_settle));
             }
 
-            float easedLift = Ease.OutCubic(_lift);
-            Vector3 rest = _cell + _offset;
-            Apply(rest + Vector3.up * (_config.LiftHeight * easedLift), 1f + (_config.LiftScale - 1f) * easedLift);
-            if (_shadow != null)
-            {
-                Transform shadow = _shadow.transform;
-                shadow.localPosition = rest + _pivot + _shadowOffset;
-                shadow.localScale = _shadowScale * easedLift;
-            }
-
+            ApplyRest();
             if (_exitPending && _settle >= 1f)
             {
                 _exitPending = false;
@@ -265,6 +261,19 @@ namespace CBJ.Gameplay
             {
                 enabled = false;
                 _dropped?.Invoke(this);
+            }
+        }
+
+        private void ApplyRest()
+        {
+            float easedLift = Ease.OutCubic(_lift);
+            Vector3 rest = _cell + _offset;
+            Apply(rest + Vector3.up * (_config.LiftHeight * easedLift), 1f + (_config.LiftScale - 1f) * easedLift);
+            if (_shadow != null)
+            {
+                Transform shadow = _shadow.transform;
+                shadow.localPosition = rest + _pivot + _shadowOffset;
+                shadow.localScale = _shadowScale * easedLift;
             }
         }
 

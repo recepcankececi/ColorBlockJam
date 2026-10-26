@@ -13,6 +13,8 @@ namespace CBJ.App
     /// </summary>
     public sealed class GameBootstrap : MonoBehaviour
     {
+        private const int MinFrameRate = 60;
+
         [Header("Assets")]
         [SerializeField] private LevelCatalog _catalog;
         [SerializeField] private BlockPalette _palette;
@@ -36,6 +38,10 @@ namespace CBJ.App
 
         private void Awake()
         {
+            // Android caps at 30 fps by default; run at the display's rate so the dragged block keeps up with the finger.
+            QualitySettings.vSyncCount = 0;
+            Application.targetFrameRate = Mathf.Max(MinFrameRate,
+                Mathf.RoundToInt((float)Screen.currentResolution.refreshRateRatio.value));
             _boardView.Initialize(_skin, _palette, _config);
             _boardCamera.Initialize(_config);
             _dragInput.Initialize(new UIBlockedPointerSource(new LegacyPointerSource(), _uiHitTest),

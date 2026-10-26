@@ -18,8 +18,8 @@ namespace CBJ.Tests.EditMode.Gameplay
         private const int WalkFrames = 2000;
         private const int GrabEveryFrames = 50;
         private const float Frame = 1f / 60f;
-        private const float MaxSpeed = 30f;
-        private const float SmoothTime = 0.04f;
+        private const float MaxSpeed = 80f;
+        private const float SmoothTime = 0.012f;
         private const float AlignTolerance = 0.08f;
         private const int SmoothFrames = 120;
         private const float SmoothArrival = 1e-3f;
@@ -404,6 +404,44 @@ namespace CBJ.Tests.EditMode.Gameplay
             drag.Drag(grab + new Vector2(0.7f, -0.2f), Frame);
 
             Assert.That(Vector2.Distance(drag.Offset, new Vector2(-0.3f, -0.2f)), Is.LessThan(Tolerance));
+        }
+
+        [Test]
+        public void Grab_WithAStartOffset_StartsWhereTheViewIs()
+        {
+            LevelSession session = Begin(Board4x3(new Vector2Int(1, 1)));
+            Block block = session.Board.Blocks[0];
+            var drag = Instant(session);
+
+            drag.Grab(block, block.Origin + CellCentre, new Vector2(0.3f, -0.2f));
+
+            AssertDrag(drag, block, new Vector2Int(1, 1), new Vector2(1.3f, 0.8f));
+        }
+
+        [Test]
+        public void Grab_WithAStartOffsetPastHalfACell_KeepsTheModelCellTheRoundedPosition()
+        {
+            LevelSession session = Begin(Board4x3(new Vector2Int(1, 1)));
+            Block block = session.Board.Blocks[0];
+            var drag = Instant(session);
+
+            drag.Grab(block, block.Origin + CellCentre, new Vector2(0.9f, 0f));
+
+            Assert.That(Vector2Int.FloorToInt(drag.Position + CellCentre), Is.EqualTo(block.Origin));
+        }
+
+        [Test]
+        public void Drag_AfterAGrabWithAStartOffset_MovesWithTheFingerFromThere()
+        {
+            LevelSession session = Begin(Board4x3(new Vector2Int(1, 1)));
+            Block block = session.Board.Blocks[0];
+            Vector2 grab = block.Origin + CellCentre;
+            var drag = Instant(session);
+            drag.Grab(block, grab, new Vector2(0.3f, 0f));
+
+            drag.Drag(grab + new Vector2(0.1f, 0f), Frame);
+
+            AssertDrag(drag, block, new Vector2Int(1, 1), new Vector2(1.4f, 1f));
         }
 
         [Test]

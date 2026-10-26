@@ -17,13 +17,13 @@ namespace CBJ.Data
         [SerializeField, Range(1f, 1.2f)] private float _liftScale = 1.03f;
 
         [Tooltip("Seconds a block takes to rise when grabbed (and to drop when released).")]
-        [SerializeField, Min(0.01f)] private float _liftDuration = 0.08f;
+        [SerializeField, Min(0.01f)] private float _liftDuration = 0.04f;
 
         [Tooltip("Fastest a held block follows the finger, in cells per second.")]
-        [SerializeField, Min(0.1f)] private float _dragMaxSpeed = 30f;
+        [SerializeField, Min(0.1f)] private float _dragMaxSpeed = 80f;
 
         [Tooltip("Seconds a held block takes, roughly, to catch up with the finger; 0 follows at once.")]
-        [SerializeField, Min(0f)] private float _dragSmoothTime = 0.04f;
+        [SerializeField, Min(0f)] private float _dragSmoothTime = 0.012f;
 
         [Tooltip("Seconds a released block takes to ease back onto its cell.")]
         [SerializeField, Min(0.01f)] private float _settleDuration = 0.12f;
