@@ -48,15 +48,25 @@ same `LevelData` format; there is no second format. All five shipped levels were
 ## Architecture
 
 ```
-Core      pure C#: BoardModel, Block, BlockShape, Door, MoveResolver, LevelData, LevelValidator
-Data      ScriptableObjects: LevelDefinition, LevelCatalog, GameConfig, BlockPalette, BoardSkin
-Gameplay  BoardView, BlockView, DoorView, DragInput, LevelSession, LevelPlayer, BoardCamera
-UI        UIRouter, ScreenFlow, Home / Settings / HUD / Pause / Fail, widgets
-App       GameBootstrap (composition root), SaveService
-Editor    LevelEditorWindow and helpers, BuildScript
+Core        pure C#
+  Board       BoardModel, Block, BlockShape, Door, MoveResolver, CellGroup
+  Level       LevelData, BlockData, DoorData, LevelValidator
+Data        ScriptableObjects: LevelDefinition, LevelCatalog, GameConfig, BlockPalette, BoardSkin
+Gameplay
+  Board       BoardView, BlockView, DoorView, BlockMeshBuilder, MeshPiecePool
+  Input       DragInput, BlockDrag, BlockPicker, TouchTracker, IPointerSource
+  Camera      BoardCamera, CameraFit
+  Session     LevelSession, LevelPlayer
+UI          UIRouter, ScreenFlow; Screens/ (Home, Settings, HUD, Pause, Fail); Widgets/
+App         GameBootstrap (composition root), LevelOrder
+  Save        SaveService, IKeyValueStore, PlayerPrefsStore
+Editor
+  LevelEditor LevelEditorWindow and helpers
+  Build       BuildScript
 ```
 
-Each folder is an assembly; references only point left (Core ← Data ← Gameplay ← UI ← App, Editor sees
+Each top-level folder is an assembly, grouped into subfolders by system; EditMode tests mirror the same folders.
+References only point left (Core ← Data ← Gameplay ← UI ← App, Editor sees
 Core + Data + Gameplay), and an EditMode test fails if an asmdef breaks that direction.
 
 Decisions and why:
